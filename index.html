@@ -201,8 +201,11 @@
         const passwordInput = document.getElementById('password').value;
         const btnSubmit = document.getElementById('btn-login-submit');
 
+        // Ambil nama asli/dasar jika pengguna tanpa sengaja mengetik beserta @domain
+        const baseUsername = usernameInput.split('@')[0].trim();
+
         // Validasi format angka untuk NIS dan NIY di Frontend
-        const isNumber = /^\d+$/.test(usernameInput);
+        const isNumber = /^\d+$/.test(baseUsername);
         if (currentLoginRole === 'siswa' && !isNumber) {
             showToast('Siswa harus login menggunakan NIS (Hanya Angka)', 'error');
             return;
@@ -217,20 +220,20 @@
         btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memeriksa...';
 
         try {
-            // Trik Isolasi Role: Merubah format Email yang dikirim ke Supabase Auth
-            // Hal ini mencegah Siswa login di tab Guru, karena domain emailnya dibuat berbeda.
-            let emailLogin = usernameInput;
-            if (!emailLogin.includes('@')) {
-                if (currentLoginRole === 'siswa') {
-                    emailLogin = usernameInput + '@siswa.cbt.com';
-                } else if (currentLoginRole === 'guru') {
-                    emailLogin = usernameInput + '@guru.cbt.com';
-                } else if (currentLoginRole === 'admin') {
-                    emailLogin = usernameInput + '@admin.cbt.com';
-                }
+            // Trik Isolasi Role KETAT: Paksa domain email berdasarkan tab yang dipilih.
+            // Apapun yang diketik user, kita akan paksa domainnya agar Supabase menolak jika salah role.
+            let domain = '';
+            if (currentLoginRole === 'siswa') {
+                domain = '@siswa.cbt.com';
+            } else if (currentLoginRole === 'guru') {
+                domain = '@guru.cbt.com';
+            } else if (currentLoginRole === 'admin') {
+                domain = '@admin.cbt.com';
             }
+            
+            const emailLogin = baseUsername + domain;
 
-            // PROSES AUTH KE SUPABASE (PERBAIKAN 3: Memanggil supabaseClient)
+            // PROSES AUTH KE SUPABASE 
             const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: emailLogin,
                 password: passwordInput,
@@ -240,10 +243,17 @@
                 throw error;
             }
 
+            // Validasi Keamanan Ganda: Pastikan data yang dikembalikan Supabase benar-benar cocok
+            const returnedEmail = data.user.email;
+            if (!returnedEmail.endsWith(domain)) {
+                await supabaseClient.auth.signOut(); // Keluarkan jika terjadi ketidaksesuaian
+                throw new Error("RoleMismatch");
+            }
+
             // LOGIN BERHASIL
             state.role = currentLoginRole;
             // Ambil nama asli dari input
-            state.user = { name: usernameInput, authData: data.user };
+            state.user = { name: baseUsername, authData: data.user };
             
             if (state.role === 'siswa') {
                 state.view = 'token-entry';
@@ -260,10 +270,12 @@
             // LOGIN GAGAL (Password salah / User tidak ditemukan / Role Mismatch)
             let pesanError = "Terjadi kesalahan saat login.";
             if (error.message.includes("Invalid login credentials")) {
-                pesanError = "Username/NIS/NIY atau Password salah!";
+                pesanError = "Username/NIS/NIY atau Password salah untuk role ini!";
             } else if (error.message.includes("Email not confirmed")) {
                 pesanError = "Akun belum diverifikasi.";
-            } 
+            } else if (error.message === "RoleMismatch") {
+                pesanError = "Akses ditolak: Akun ini bukan untuk role tersebut.";
+            }
             showToast(pesanError, 'error');
             
             // Kembalikan tombol seperti semula
