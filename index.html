@@ -35,6 +35,9 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <!-- Tambahkan Library SheetJS untuk Export/Import Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="text-slate-800 antialiased h-screen flex flex-col overflow-hidden">
 
@@ -75,6 +78,14 @@
         examToken: 'ABUZAIRI2026',
         mapel: ['Matematika', 'Bahasa Indonesia', 'IPA', 'IPS', 'Pendidikan Agama Islam'], // Data dari Admin
         kelas: ['7A', '7B', '8A', '9A'], // Data dari Admin
+        guruSetup: {
+            mapel: '',
+            kelas: '',
+            bobotPG: 10,
+            bobotEssay: 20,
+            targetPG: 20,
+            targetEssay: 5
+        },
         cbt: {
             questions: [
                 { id: 1, type: 'pg', bobot: 20, text: 'Siapakah presiden pertama Indonesia?', gambar: null, options: ['Soekarno', 'Suharto', 'Habibie', 'Jokowi'], answer: null },
@@ -639,23 +650,68 @@
 
         let content = `
             <div class="flex justify-between items-center mb-6">
-                <h2 class="text-xl font-bold">Manajemen Bank Soal</h2>
-                <div class="flex gap-2">
-                    <button class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-green-700 transition" onclick="downloadTemplateSoal()">
-                        <i class="fas fa-download mr-2"></i>Template Soal
-                    </button>
-                    <button class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-slate-900 transition" onclick="openBuatSoalModal()">
-                        <i class="fas fa-plus mr-2"></i>Buat Soal
-                    </button>
-                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700 transition" onclick="showToast('Fitur Import Soal Format JSON/Excel/Word', 'info')">
-                        <i class="fas fa-file-import mr-2"></i>Import Soal
-                    </button>
+                <h2 class="text-2xl font-bold text-slate-800">Manajemen Bank Soal</h2>
+            </div>
+
+            <!-- Panel 1: Pengaturan Identitas Ujian -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                <h3 class="text-lg font-bold mb-4 border-b pb-2 text-slate-800">
+                    <i class="fas fa-cog mr-2 text-blue-500"></i> 1. Pengaturan Identitas Ujian
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Mata Pelajaran <span class="text-red-500">*</span></label>
+                        <select id="setup-mapel" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('mapel', this.value)">
+                            <option value="">-- Pilih Mapel --</option>
+                            ${state.mapel.map(m => `<option value="${m}" ${state.guruSetup.mapel === m ? 'selected' : ''}>${m}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Kelas <span class="text-red-500">*</span></label>
+                        <select id="setup-kelas" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('kelas', this.value)">
+                            <option value="">-- Pilih Kelas --</option>
+                            ${state.kelas.map(k => `<option value="${k}" ${state.guruSetup.kelas === k ? 'selected' : ''}>${k}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Target Jml Soal PG</label>
+                        <input type="number" min="0" value="${state.guruSetup.targetPG}" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('targetPG', this.value)">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Bobot per Soal PG</label>
+                        <input type="number" min="1" value="${state.guruSetup.bobotPG}" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('bobotPG', this.value)">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Target Jml Soal Essay</label>
+                        <input type="number" min="0" value="${state.guruSetup.targetEssay}" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('targetEssay', this.value)">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Bobot per Soal Essay</label>
+                        <input type="number" min="1" value="${state.guruSetup.bobotEssay}" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('bobotEssay', this.value)">
+                    </div>
                 </div>
             </div>
-            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">
-                <i class="fas fa-box-open text-4xl mb-3 text-slate-300"></i>
-                <p>Integrasi database Supabase akan menampilkan daftar soal ujian di sini.</p>
-                <p class="text-sm mt-2">Sebagai Guru, Anda memiliki akses penuh untuk menambah, mengedit, dan menghapus bank soal.</p>
+
+            <!-- Panel 2: Aksi Pembuatan Soal -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                <h3 class="text-lg font-bold mb-4 border-b pb-2 text-slate-800">
+                    <i class="fas fa-list-check mr-2 text-green-500"></i> 2. Aksi Pengisian Soal
+                </h3>
+                <div class="flex flex-wrap gap-3">
+                    <button class="bg-green-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow hover:bg-green-700 transition flex items-center gap-2" onclick="downloadTemplateSoalExcel()">
+                        <i class="fas fa-file-excel"></i> Unduh Template Excel
+                    </button>
+                    <label class="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow hover:bg-blue-700 transition flex items-center gap-2 cursor-pointer">
+                        <i class="fas fa-file-import"></i> Import Excel
+                        <input type="file" id="import-excel-input" class="hidden" accept=".xlsx, .xls" onchange="importSoalExcel(event)">
+                    </label>
+                    <button class="bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow hover:bg-slate-900 transition flex items-center gap-2" onclick="cekSetupDanBukaModal()">
+                        <i class="fas fa-plus"></i> Buat Soal Manual
+                    </button>
+                </div>
+                <p class="text-xs text-slate-500 mt-3"><i class="fas fa-info-circle"></i> Pastikan Anda telah mengisi Mapel dan Kelas di Pengaturan Identitas sebelum melakukan Import atau Buat Soal Manual.</p>
             </div>
         `;
 
@@ -877,16 +933,124 @@
         // TODO: Integrate with jsPDF or SheetJS for client-side export, or trigger GAS Webhook
     }
 
-    function downloadTemplateSoal() {
-        const csvContent = "data:text/csv;charset=utf-8,Jenis,Mapel,Kelas,Bobot,Pertanyaan,Gambar_URL,Opsi_A,Opsi_B,Opsi_C,Opsi_D,Kunci\npg,Matematika,7A,10,Berapa hasil dari $1+1$?,https://link-gambar.com/img.jpg,1,2,3,4,1\nessay,IPA,8A,20,Jelaskan proses fotosintesis!,,,,,Cahaya Matahari\n";
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", "Template_Soal_CBT_Abu_Zairi.csv");
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        showToast('Template soal berhasil diunduh.', 'success');
+    // --- FITUR GURU: UPDATE SETUP, UNDUH & IMPORT EXCEL ---
+    function updateGuruSetup(key, value) {
+        if(key === 'bobotPG' || key === 'bobotEssay' || key === 'targetPG' || key === 'targetEssay') {
+            state.guruSetup[key] = parseInt(value) || 0;
+        } else {
+            state.guruSetup[key] = value;
+        }
+    }
+
+    function cekSetupDanBukaModal() {
+        if (!state.guruSetup.mapel || !state.guruSetup.kelas) {
+            showToast('Silakan pilih Mata Pelajaran dan Kelas di bagian Pengaturan Identitas Ujian terlebih dahulu!', 'error');
+            return;
+        }
+        openBuatSoalModal();
+    }
+
+    function downloadTemplateSoalExcel() {
+        // Mendefinisikan struktur baris Excel
+        const ws_data = [
+            ["Jenis (pg/essay)", "Pertanyaan", "Opsi_A", "Opsi_B", "Opsi_C", "Opsi_D", "Kunci_Jawaban", "Gambar_URL"],
+            ["pg", "Berapa hasil dari $1+1$?", "1", "2", "3", "4", "2", ""],
+            ["essay", "Jelaskan proses fotosintesis!", "", "", "", "", "Cahaya Matahari", ""]
+        ];
+        
+        // Konversi ke Worksheet
+        const ws = XLSX.utils.aoa_to_sheet(ws_data);
+        
+        // Merapikan lebar kolom agar enak dilihat
+        const wscols = [
+            {wch: 18}, // Jenis
+            {wch: 50}, // Pertanyaan
+            {wch: 15}, // Opsi_A
+            {wch: 15}, // Opsi_B
+            {wch: 15}, // Opsi_C
+            {wch: 15}, // Opsi_D
+            {wch: 20}, // Kunci_Jawaban
+            {wch: 30}  // Gambar_URL
+        ];
+        ws['!cols'] = wscols;
+
+        // Membuat file Excel dan mengunduh
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Template_Soal");
+        XLSX.writeFile(wb, "Template_Soal_CBT.xlsx");
+        
+        showToast('Template Excel berhasil diunduh.', 'success');
+    }
+
+    function importSoalExcel(event) {
+        if (!state.guruSetup.mapel || !state.guruSetup.kelas) {
+            showToast('Pilih Mapel dan Kelas terlebih dahulu di Pengaturan Identitas Ujian!', 'error');
+            event.target.value = ''; // Reset input file
+            return;
+        }
+
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                showToast('Membaca file Excel...', 'info');
+                const data = e.target.result;
+                const workbook = XLSX.read(data, {type: 'binary'});
+                
+                // Ambil sheet pertama
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                
+                // Konversi isi sheet ke JSON
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                if(json.length === 0) {
+                    showToast('File Excel kosong atau format tidak sesuai.', 'error');
+                    return;
+                }
+
+                showToast(`Memproses ${json.length} soal ke database...`, 'info');
+                
+                // Format data agar sesuai dengan struktur Database Supabase kita
+                const formattedData = json.map(row => {
+                    const jenis = (row['Jenis (pg/essay)'] || '').toLowerCase().trim();
+                    let opsi_jawaban = null;
+                    if(jenis === 'pg') {
+                        opsi_jawaban = [
+                            String(row['Opsi_A'] || ''), 
+                            String(row['Opsi_B'] || ''), 
+                            String(row['Opsi_C'] || ''), 
+                            String(row['Opsi_D'] || '')
+                        ];
+                    }
+                    
+                    return {
+                        mapel: state.guruSetup.mapel,
+                        kelas: state.guruSetup.kelas,
+                        bobot: jenis === 'pg' ? state.guruSetup.bobotPG : state.guruSetup.bobotEssay,
+                        jenis: jenis,
+                        pertanyaan: String(row['Pertanyaan'] || ''),
+                        opsi_jawaban: opsi_jawaban,
+                        kunci_jawaban: String(row['Kunci_Jawaban'] || ''),
+                        gambar_url: row['Gambar_URL'] || null
+                    };
+                });
+
+                // Proses Upload Massal ke Supabase
+                const { error } = await supabaseClient.from('soal').insert(formattedData);
+                if(error) throw error;
+
+                showToast(`Sukses! ${json.length} soal berhasil diimport.`, 'success');
+            } catch (err) {
+                console.error('Error import excel:', err);
+                showToast('Gagal import: ' + err.message, 'error');
+            }
+        };
+        
+        reader.readAsBinaryString(file);
+        event.target.value = ''; // Reset input agar bisa upload file yang sama jika gagal
     }
 
     // --- FITUR GURU: BUAT SOAL MANUAL ---
@@ -900,28 +1064,16 @@
                     <h3 class="text-xl font-bold text-slate-800">Buat Soal Baru</h3>
                     <button onclick="closeBuatSoalModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
                 </div>
-                <form onsubmit="saveSoal(event)" class="space-y-4 text-left">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Mata Pelajaran <span class="text-red-500">*</span></label>
-                            <select id="input-mapel" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="">-- Pilih Mapel --</option>
-                                ${state.mapel.map(m => `<option value="${m}">${m}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Kelas <span class="text-red-500">*</span></label>
-                            <select id="input-kelas" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="">-- Pilih Kelas --</option>
-                                ${state.kelas.map(k => `<option value="${k}">${k}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Bobot Nilai <span class="text-red-500">*</span></label>
-                            <input type="number" id="input-bobot" required min="1" max="100" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: 10">
-                        </div>
+                
+                <div class="mb-4 p-3 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100 flex items-center gap-3">
+                    <i class="fas fa-info-circle text-blue-500 text-lg"></i> 
+                    <div>
+                        Menambahkan soal untuk: <strong>${state.guruSetup.mapel}</strong> (Kelas ${state.guruSetup.kelas}). <br>
+                        <span class="text-xs text-blue-600">Bobot telah disesuaikan berdasarkan pengaturan awal Anda.</span>
                     </div>
+                </div>
 
+                <form onsubmit="saveSoal(event)" class="space-y-4 text-left">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Jenis Soal</label>
                         <select id="input-jenis" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="toggleOpsiJawaban()">
@@ -1011,10 +1163,12 @@
         btnSimpan.disabled = true;
         btnSimpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
-        const mapel = document.getElementById('input-mapel').value;
-        const kelas = document.getElementById('input-kelas').value;
-        const bobot = document.getElementById('input-bobot').value;
+        // Mengambil Mapel, Kelas, dan Bobot otomatis dari state Dashboard
+        const mapel = state.guruSetup.mapel;
+        const kelas = state.guruSetup.kelas;
         const jenis = document.getElementById('input-jenis').value;
+        const bobot = jenis === 'pg' ? state.guruSetup.bobotPG : state.guruSetup.bobotEssay;
+        
         const pertanyaan = document.getElementById('input-pertanyaan').value;
         const fileInput = document.getElementById('input-gambar');
         
@@ -1053,12 +1207,12 @@
                     { 
                         mapel: mapel,
                         kelas: kelas,
-                        bobot: parseInt(bobot),
+                        bobot: bobot,
                         jenis: jenis, 
                         pertanyaan: pertanyaan, 
                         opsi_jawaban: opsi_jawaban, 
                         kunci_jawaban: kunci_jawaban,
-                        gambar_url: gambarUrl // Membutuhkan kolom 'gambar_url' di Supabase
+                        gambar_url: gambarUrl 
                     }
                 ])
                 .select();
