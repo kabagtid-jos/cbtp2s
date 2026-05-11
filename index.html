@@ -85,7 +85,14 @@
             bobotEssay: 20,
             targetPG: 20,
             targetEssay: 5,
-            daftarSoal: [] // Tambahan: Menyimpan soal yang diambil dari database
+            daftarSoal: [],
+            bankSoal: []
+        },
+        adminSetup: {
+            // Dikosongkan agar mengambil langsung dari database Supabase
+            dataGuru: [],
+            dataSiswa: [],
+            isLoading: false
         },
         cbt: {
             questions: [
@@ -653,10 +660,20 @@
             { id: 'soal', icon: 'fa-file-alt', label: 'Manajemen Soal' }
         ];
 
+        // FILTER HAK AKSES GURU
+        // Cari data guru yang sedang login di database/state
+        const loggedInGuru = state.adminSetup.dataGuru.find(g => g.niy === state.user.name);
+        
+        // Jika data guru ditemukan, gunakan mapel/kelas yang ditugaskan. Jika tidak (mockup), kosongkan atau tampilkan semua.
+        const myMapel = loggedInGuru ? loggedInGuru.mapel : state.mapel;
+        const myKelas = loggedInGuru ? loggedInGuru.kelas : state.kelas;
+
         let content = `
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-bold text-slate-800">Manajemen Bank Soal</h2>
             </div>
+
+            ${!loggedInGuru ? `<div class="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-6 text-sm"><i class="fas fa-exclamation-triangle mr-2"></i> Peringatan: Profil NIY Anda belum didaftarkan oleh Admin. Anda sementara melihat seluruh akses (Mode Uji Coba).</div>` : ''}
 
             <!-- Panel 1: Pengaturan Identitas Ujian -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
@@ -668,14 +685,14 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1">Mata Pelajaran <span class="text-red-500">*</span></label>
                         <select id="setup-mapel" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('mapel', this.value)">
                             <option value="">-- Pilih Mapel --</option>
-                            ${state.mapel.map(m => `<option value="${m}" ${state.guruSetup.mapel === m ? 'selected' : ''}>${m}</option>`).join('')}
+                            ${myMapel.map(m => `<option value="${m}" ${state.guruSetup.mapel === m ? 'selected' : ''}>${m}</option>`).join('')}
                         </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Kelas <span class="text-red-500">*</span></label>
                         <select id="setup-kelas" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="updateGuruSetup('kelas', this.value)">
                             <option value="">-- Pilih Kelas --</option>
-                            ${state.kelas.map(k => `<option value="${k}" ${state.guruSetup.kelas === k ? 'selected' : ''}>${k}</option>`).join('')}
+                            ${myKelas.map(k => `<option value="${k}" ${state.guruSetup.kelas === k ? 'selected' : ''}>${k}</option>`).join('')}
                         </select>
                     </div>
                 </div>
@@ -794,7 +811,8 @@
     function getAdminDashboardHTML() {
         const tabs = [
             { id: 'monitor', icon: 'fa-desktop', label: 'Monitor Ujian' },
-            { id: 'pengguna', icon: 'fa-users', label: 'Manajemen Pengguna' },
+            { id: 'data-siswa', icon: 'fa-user-graduate', label: 'Data Siswa' },
+            { id: 'data-guru', icon: 'fa-chalkboard-teacher', label: 'Data Guru' },
             { id: 'master', icon: 'fa-database', label: 'Data Master' },
             { id: 'koreksi', icon: 'fa-robot', label: 'Koreksi AI' },
             { id: 'rekap', icon: 'fa-table', label: 'Rekap Nilai' },
@@ -809,7 +827,14 @@
                         <i class="fas fa-sync-alt mr-2"></i>Generate Token
                     </button>
                 </div>
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-blue-50 border border-blue-100 p-4 rounded-lg mb-6 flex gap-3 text-sm text-blue-800">
+                    <i class="fas fa-info-circle text-blue-500 text-lg mt-0.5"></i>
+                    <div>
+                        <strong>Info Monitor Ujian:</strong><br>
+                        Fitur Monitor Real-Time memerlukan setup WebSocket (Realtime Subscriptions) di Supabase. Untuk sementara, Anda dapat melihat hasil ujian yang sudah selesai di menu <b>Rekap Nilai</b> atau di <b>Google Spreadsheet</b> Anda.
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden opacity-60">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
@@ -820,33 +845,109 @@
                             </tr>
                         </thead>
                         <tbody class="text-sm">
-                            <tr class="border-b border-slate-100 hover:bg-slate-50">
-                                <td class="p-4 font-medium">Ahmad Budi</td>
-                                <td class="p-4"><span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Mengerjakan</span></td>
-                                <td class="p-4">3/4 Soal</td>
-                                <td class="p-4"><button class="text-red-500 hover:underline" onclick="showToast('Siswa di-reset', 'info')">Reset Login</button></td>
-                            </tr>
-                            <tr class="hover:bg-slate-50">
-                                <td class="p-4 font-medium">Siti Aminah</td>
-                                <td class="p-4"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">Selesai</span></td>
-                                <td class="p-4">4/4 Soal</td>
-                                <td class="p-4"><button class="text-slate-500 hover:underline">Lihat Hasil</button></td>
+                            <tr>
+                                <td colspan="4" class="p-6 text-center text-slate-500">Menunggu Integrasi Tabel Realtime...</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             `;
-        } else if (adminActiveTab === 'pengguna') {
+        } else if (adminActiveTab === 'data-siswa') {
             content = `
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold">Manajemen Pengguna</h2>
-                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Tambah Pengguna Baru', 'info')">
-                        <i class="fas fa-user-plus mr-2"></i>Tambah Data
+                    <h2 class="text-xl font-bold">Manajemen Data Siswa</h2>
+                    <button class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-green-700 transition" onclick="openModalSiswa()">
+                        <i class="fas fa-plus mr-2"></i>Tambah Siswa
                     </button>
                 </div>
-                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">
-                    <i class="fas fa-users-cog text-4xl mb-3 text-slate-300"></i>
-                    <p>Integrasi Supabase Auth untuk manajemen data Siswa dan data Guru.</p>
+                <div class="bg-blue-50 border border-blue-100 p-4 rounded-lg mb-6 flex gap-3 text-sm text-blue-800">
+                    <i class="fas fa-info-circle text-blue-500 text-lg mt-0.5"></i>
+                    <div>
+                        <strong>Pengaturan Data Siswa:</strong><br>
+                        Data di sini adalah Profil Siswa. Pastikan Anda juga telah membuatkan akun login mereka di <i>Supabase Authentication</i> dengan format email <b>[NIS]@siswa.cbt.com</b> agar mereka bisa masuk ke aplikasi.
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                <th class="p-3 font-medium w-32">NIS</th>
+                                <th class="p-3 font-medium">Nama Lengkap</th>
+                                <th class="p-3 font-medium w-24">Kelas</th>
+                                <th class="p-3 font-medium w-24 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${state.adminSetup.isLoading ? `<tr><td colspan="4" class="text-center p-6 text-blue-500"><i class="fas fa-spinner fa-spin mr-2"></i> Memuat data siswa...</td></tr>` : 
+                              state.adminSetup.dataSiswa.length === 0 ? `
+                                <tr><td colspan="4" class="text-center p-6 text-slate-500">Belum ada data siswa di database.</td></tr>
+                            ` : state.adminSetup.dataSiswa.map((s, idx) => `
+                                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                    <td class="p-3 font-medium text-slate-700">${s.nis || s.nisn || '-'}</td>
+                                    <td class="p-3 text-slate-600">${s.nama_lengkap || s.nama || '-'}</td>
+                                    <td class="p-3 text-slate-600">${s.kelas || '-'}</td>
+                                    <td class="p-3 text-center">
+                                        <button onclick="hapusDataSiswa('${s.id}')" class="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded" title="Hapus"><i class="fas fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else if (adminActiveTab === 'data-guru') {
+            content = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Manajemen Data Guru & Hak Akses</h2>
+                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700 transition" onclick="openModalGuru()">
+                        <i class="fas fa-plus mr-2"></i>Tambah Guru
+                    </button>
+                </div>
+                <div class="bg-blue-50 border border-blue-100 p-4 rounded-lg mb-6 flex gap-3 text-sm text-blue-800">
+                    <i class="fas fa-info-circle text-blue-500 text-lg mt-0.5"></i>
+                    <div>
+                        <strong>Pengaturan Hak Akses:</strong><br>
+                        Guru yang didaftarkan di sini hanya akan bisa membuat soal untuk <b>Mata Pelajaran</b> dan <b>Kelas</b> yang ditugaskan kepada mereka.
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                <th class="p-3 font-medium w-24">NIY</th>
+                                <th class="p-3 font-medium w-48">Nama Guru</th>
+                                <th class="p-3 font-medium">Mapel Diampu</th>
+                                <th class="p-3 font-medium w-48">Kelas Diampu</th>
+                                <th class="p-3 font-medium w-24 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${state.adminSetup.isLoading ? `<tr><td colspan="5" class="text-center p-6 text-blue-500"><i class="fas fa-spinner fa-spin mr-2"></i> Memuat data guru...</td></tr>` : 
+                              state.adminSetup.dataGuru.length === 0 ? `
+                                <tr><td colspan="5" class="text-center p-6 text-slate-500">Belum ada data guru di database.</td></tr>
+                            ` : state.adminSetup.dataGuru.map((g, idx) => `
+                                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                    <td class="p-3 font-medium text-slate-700">${g.niy}</td>
+                                    <td class="p-3 font-bold text-slate-800">${g.nama}</td>
+                                    <td class="p-3">
+                                        <div class="flex flex-wrap gap-1">
+                                            ${(g.mapel || []).map(m => `<span class="bg-blue-50 text-blue-700 border border-blue-100 text-[10px] px-2 py-0.5 rounded">${m}</span>`).join('')}
+                                            ${(!g.mapel || g.mapel.length === 0) ? '<span class="text-xs text-red-500 italic">Belum diset</span>' : ''}
+                                        </div>
+                                    </td>
+                                    <td class="p-3">
+                                        <div class="flex flex-wrap gap-1">
+                                            ${(g.kelas || []).map(k => `<span class="bg-green-50 text-green-700 border border-green-100 text-[10px] px-2 py-0.5 rounded">${k}</span>`).join('')}
+                                            ${(!g.kelas || g.kelas.length === 0) ? '<span class="text-xs text-red-500 italic">Belum diset</span>' : ''}
+                                        </div>
+                                    </td>
+                                    <td class="p-3 text-center">
+                                        <button onclick="hapusDataGuru(${g.id})" class="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded" title="Hapus"><i class="fas fa-trash"></i></button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
                 </div>
             `;
         } else if (adminActiveTab === 'master') {
@@ -954,14 +1055,301 @@
         `;
     }
 
-    function switchAdminTab(tabId) {
+    async function switchAdminTab(tabId) {
         adminActiveTab = tabId;
-        render();
+        state.adminSetup.isLoading = true;
+        render(); // Tampilkan loading state
+
+        if (tabId === 'data-guru') {
+            await loadDataGuruFromDB();
+        } else if (tabId === 'data-siswa') {
+            await loadDataSiswaFromDB();
+        }
+        
+        state.adminSetup.isLoading = false;
+        render(); // Render ulang setelah data masuk
+    }
+
+    // --- FUNGSI AMBIL DATA DARI DATABASE ---
+    async function loadDataGuruFromDB() {
+        try {
+            const { data, error } = await supabaseClient.from('guru').select('*').order('id', { ascending: true });
+            if (error) throw error;
+            state.adminSetup.dataGuru = data || [];
+        } catch (error) {
+            console.error('Gagal mengambil data guru:', error);
+            showToast('Gagal memuat data guru dari Supabase', 'error');
+        }
+    }
+
+    async function loadDataSiswaFromDB() {
+        try {
+            const { data, error } = await supabaseClient.from('siswa').select('*');
+            if (error) throw error;
+            state.adminSetup.dataSiswa = data || [];
+        } catch (error) {
+            console.error('Gagal mengambil data siswa:', error);
+            showToast('Gagal memuat data siswa dari Supabase', 'error');
+        }
     }
 
     function exportData(type) {
         showToast(`Memproses export data ke ${type}...`, 'info');
         // TODO: Integrate with jsPDF or SheetJS for client-side export, or trigger GAS Webhook
+    }
+
+    // --- FITUR ADMIN: MANAJEMEN DATA SISWA ---
+    function openModalSiswa() {
+        const modal = document.createElement('div');
+        modal.id = 'tambah-siswa-modal';
+        modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
+        
+        // Generate Dropdown untuk Kelas
+        const kelasOptions = state.kelas.map(k => `<option value="${k}">${k}</option>`).join('');
+
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <h3 class="text-xl font-bold text-slate-800">Tambah Profil Siswa</h3>
+                    <button onclick="closeModalSiswa()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
+                </div>
+                <form onsubmit="saveSiswa(event)" class="space-y-4 text-left">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">NIS (Nomor Induk Siswa) <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-nis-siswa" required pattern="[0-9]+" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Hanya Angka">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap <span class="text-red-500">*</span></label>
+                        <input type="text" id="input-nama-siswa" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nama lengkap siswa">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Kelas <span class="text-red-500">*</span></label>
+                        <select id="input-kelas-siswa" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                            <option value="">-- Pilih Kelas --</option>
+                            ${kelasOptions}
+                        </select>
+                    </div>
+                    
+                    <div class="pt-4 flex justify-end gap-3 border-t mt-4">
+                        <button type="button" onclick="closeModalSiswa()" class="px-5 py-2 rounded-lg bg-slate-200 text-slate-700 font-medium hover:bg-slate-300 transition">Batal</button>
+                        <button type="submit" id="btn-simpan-siswa" class="px-5 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 transition flex items-center gap-2">
+                            <i class="fas fa-save"></i> Simpan Siswa
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function closeModalSiswa() {
+        const modal = document.getElementById('tambah-siswa-modal');
+        if (modal) modal.remove();
+    }
+
+    async function saveSiswa(e) {
+        e.preventDefault();
+        
+        const btnSimpan = document.getElementById('btn-simpan-siswa');
+        btnSimpan.disabled = true;
+        btnSimpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+
+        const nis = document.getElementById('input-nis-siswa').value;
+        const nama = document.getElementById('input-nama-siswa').value;
+        const kelas = document.getElementById('input-kelas-siswa').value;
+
+        try {
+            // Insert data ke database Supabase
+            const { error } = await supabaseClient.from('siswa').insert([
+                { nis: nis, nama_lengkap: nama, kelas: kelas }
+            ]);
+
+            if (error) throw error;
+
+            showToast(`Data siswa ${nama} berhasil disimpan ke Database.`, 'success');
+            closeModalSiswa();
+            
+            // Render ulang dan ambil data baru
+            state.adminSetup.isLoading = true;
+            render();
+            await loadDataSiswaFromDB();
+            state.adminSetup.isLoading = false;
+            render();
+
+        } catch (error) {
+            console.error('Error saving siswa:', error);
+            showToast('Gagal menyimpan ke database. Pastikan tabel siswa sudah sesuai!', 'error');
+        } finally {
+            if (btnSimpan) {
+                btnSimpan.disabled = false;
+                btnSimpan.innerHTML = '<i class="fas fa-save"></i> Simpan Siswa';
+            }
+        }
+    }
+
+
+    // --- FITUR ADMIN: MANAJEMEN DATA GURU & HAK AKSES ---
+    function openModalGuru() {
+        const modal = document.createElement('div');
+        modal.id = 'tambah-guru-modal';
+        modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
+        
+        // Generate Checkboxes untuk Mapel
+        const mapelCheckboxes = state.mapel.map((m, i) => `
+            <label class="flex items-center gap-2 p-2 border rounded-lg hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" name="cb-mapel" value="${m}" class="w-4 h-4 text-blue-600 rounded">
+                <span class="text-sm text-slate-700">${m}</span>
+            </label>
+        `).join('');
+
+        // Generate Checkboxes untuk Kelas
+        const kelasCheckboxes = state.kelas.map((k, i) => `
+            <label class="flex items-center gap-2 p-2 border rounded-lg hover:bg-slate-50 cursor-pointer">
+                <input type="checkbox" name="cb-kelas" value="${k}" class="w-4 h-4 text-green-600 rounded">
+                <span class="text-sm text-slate-700">${k}</span>
+            </label>
+        `).join('');
+
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <h3 class="text-xl font-bold text-slate-800">Tambah Profil Guru & Hak Akses</h3>
+                    <button onclick="closeModalGuru()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
+                </div>
+                <form onsubmit="saveGuru(event)" class="space-y-5 text-left">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">NIY (Nomor Induk Yayasan) <span class="text-red-500">*</span></label>
+                            <input type="text" id="input-niy-guru" required pattern="[0-9]+" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Hanya Angka">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Lengkap <span class="text-red-500">*</span></label>
+                            <input type="text" id="input-nama-guru" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Beserta gelar">
+                        </div>
+                    </div>
+                    
+                    <div class="border-t pt-4">
+                        <label class="block text-sm font-bold text-slate-800 mb-2">Hak Akses Mata Pelajaran <span class="text-red-500">*</span></label>
+                        <p class="text-xs text-slate-500 mb-3">Pilih mata pelajaran yang boleh dikelola oleh guru ini.</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            ${mapelCheckboxes}
+                        </div>
+                    </div>
+
+                    <div class="border-t pt-4">
+                        <label class="block text-sm font-bold text-slate-800 mb-2">Hak Akses Kelas <span class="text-red-500">*</span></label>
+                        <p class="text-xs text-slate-500 mb-3">Pilih kelas yang boleh diujikan oleh guru ini.</p>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                            ${kelasCheckboxes}
+                        </div>
+                    </div>
+                    
+                    <div class="pt-4 flex justify-end gap-3 border-t mt-4">
+                        <button type="button" onclick="closeModalGuru()" class="px-5 py-2 rounded-lg bg-slate-200 text-slate-700 font-medium hover:bg-slate-300 transition">Batal</button>
+                        <button type="submit" id="btn-simpan-guru" class="px-5 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition flex items-center gap-2">
+                            <i class="fas fa-save"></i> Simpan Guru
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function closeModalGuru() {
+        const modal = document.getElementById('tambah-guru-modal');
+        if (modal) modal.remove();
+    }
+
+    async function saveGuru(e) {
+        e.preventDefault();
+        
+        // Ambil checkbox Mapel yang dicentang
+        const selectedMapel = Array.from(document.querySelectorAll('input[name="cb-mapel"]:checked')).map(cb => cb.value);
+        // Ambil checkbox Kelas yang dicentang
+        const selectedKelas = Array.from(document.querySelectorAll('input[name="cb-kelas"]:checked')).map(cb => cb.value);
+
+        if (selectedMapel.length === 0 || selectedKelas.length === 0) {
+            showToast('Pilih setidaknya 1 Mapel dan 1 Kelas!', 'error');
+            return;
+        }
+
+        const btnSimpan = document.getElementById('btn-simpan-guru');
+        btnSimpan.disabled = true;
+        btnSimpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memproses...';
+
+        const niy = document.getElementById('input-niy-guru').value;
+        const nama = document.getElementById('input-nama-guru').value;
+
+        try {
+            // Insert data ke database Supabase
+            const { error } = await supabaseClient.from('guru').insert([
+                { niy: niy, nama: nama, mapel: selectedMapel, kelas: selectedKelas }
+            ]);
+
+            if (error) throw error;
+
+            showToast(`Data guru ${nama} berhasil disimpan ke Database.`, 'success');
+            closeModalGuru();
+            
+            // Render ulang dan ambil data baru
+            state.adminSetup.isLoading = true;
+            render();
+            await loadDataGuruFromDB();
+            state.adminSetup.isLoading = false;
+            render();
+
+        } catch (error) {
+            console.error('Error saving guru:', error);
+            showToast('Gagal menyimpan ke database. Pastikan tabel guru sudah dibuat!', 'error');
+        } finally {
+            if (btnSimpan) {
+                btnSimpan.disabled = false;
+                btnSimpan.innerHTML = '<i class="fas fa-save"></i> Simpan Guru';
+            }
+        }
+    }
+
+    async function hapusDataGuru(id) {
+        if(!confirm('Anda yakin ingin menghapus data profil guru ini?')) return;
+        
+        try {
+            const { error } = await supabaseClient.from('guru').delete().eq('id', id);
+            if (error) throw error;
+            
+            showToast('Data guru berhasil dihapus dari Database', 'success');
+            
+            // Refresh data
+            state.adminSetup.isLoading = true;
+            render();
+            await loadDataGuruFromDB();
+            state.adminSetup.isLoading = false;
+            render();
+
+        } catch (error) {
+            showToast('Gagal menghapus data: ' + error.message, 'error');
+        }
+    }
+
+    async function hapusDataSiswa(id) {
+        if(!confirm('Anda yakin ingin menghapus data profil siswa ini?')) return;
+        
+        try {
+            const { error } = await supabaseClient.from('siswa').delete().eq('id', id);
+            if (error) throw error;
+            
+            showToast('Data siswa berhasil dihapus dari Database', 'success');
+            
+            // Refresh data
+            state.adminSetup.isLoading = true;
+            render();
+            await loadDataSiswaFromDB();
+            state.adminSetup.isLoading = false;
+            render();
+
+        } catch (error) {
+            showToast('Gagal menghapus data: ' + error.message, 'error');
+        }
     }
 
     // --- FITUR GURU: UPDATE SETUP, UNDUH & IMPORT EXCEL ---
