@@ -30,6 +30,11 @@
             animation: slideIn 0.3s ease-out forwards;
         }
     </style>
+    
+    <!-- Tambahkan Library KaTeX untuk Merender Rumus Matematika -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 </head>
 <body class="text-slate-800 antialiased h-screen flex flex-col overflow-hidden">
 
@@ -68,12 +73,14 @@
         role: null, // 'siswa', 'guru', or 'admin'
         user: null,
         examToken: 'ABUZAIRI2026',
+        mapel: ['Matematika', 'Bahasa Indonesia', 'IPA', 'IPS', 'Pendidikan Agama Islam'], // Data dari Admin
+        kelas: ['7A', '7B', '8A', '9A'], // Data dari Admin
         cbt: {
             questions: [
-                { id: 1, type: 'pg', text: 'Siapakah presiden pertama Indonesia?', options: ['Soekarno', 'Suharto', 'Habibie', 'Jokowi'], answer: null },
-                { id: 2, type: 'pg', text: 'Berapakah hasil dari 5 x 5?', options: ['10', '20', '25', '30'], answer: null },
-                { id: 3, type: 'pg', text: 'Ibukota provinsi Jawa Timur adalah...', options: ['Surabaya', 'Malang', 'Semarang', 'Bandung'], answer: null },
-                { id: 4, type: 'essay', text: 'Jelaskan secara singkat makna dari Pancasila sila ke-3!', answer: null }
+                { id: 1, type: 'pg', bobot: 20, text: 'Siapakah presiden pertama Indonesia?', gambar: null, options: ['Soekarno', 'Suharto', 'Habibie', 'Jokowi'], answer: null },
+                { id: 2, type: 'pg', bobot: 30, text: 'Selesaikan persamaan akar kuadrat berikut menggunakan rumus ABC: $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$', gambar: null, options: ['Rumus ABC', 'Pythagoras', 'Gravitasi', 'Relativitas'], answer: null },
+                { id: 3, type: 'pg', bobot: 20, text: 'Perhatikan gambar berikut. Candi di bawah ini merupakan peninggalan bercorak...', gambar: 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Borobudur_Temple_from_air.jpg/320px-Borobudur_Temple_from_air.jpg', options: ['Hindu', 'Buddha', 'Islam', 'Kristen'], answer: null },
+                { id: 4, type: 'essay', bobot: 30, text: 'Jelaskan secara singkat makna dari Pancasila sila ke-3!', gambar: null, answer: null }
             ],
             currentIndex: 0,
             timeLeft: 120, // 2 minutes for demo
@@ -121,6 +128,18 @@
             case 'cbt-result': app.innerHTML = getCBTResultHTML(); break;
             case 'guru-dashboard': app.innerHTML = getGuruDashboardHTML(); break;
             case 'admin-dashboard': app.innerHTML = getAdminDashboardHTML(); break;
+        }
+
+        // Render rumus matematika (KaTeX) setiap kali tampilan berganti
+        if (window.renderMathInElement) {
+            setTimeout(() => {
+                renderMathInElement(document.getElementById('app'), {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true}, // Untuk rumus Blok Baru
+                        {left: "$", right: "$", display: false}   // Untuk rumus Sebaris (Inline)
+                    ]
+                });
+            }, 100);
         }
     }
 
@@ -385,11 +404,19 @@
                     <main class="flex-1 overflow-y-auto p-4 md:p-6 hide-scroll relative pb-24">
                         <div class="max-w-3xl mx-auto bg-white p-5 md:p-8 rounded-xl shadow-sm border border-slate-100">
                             <div class="flex justify-between items-center mb-4 border-b pb-3">
-                                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
-                                    Soal No. ${state.cbt.currentIndex + 1}
-                                </span>
+                                <div class="flex items-center gap-3">
+                                    <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                                        Soal No. ${state.cbt.currentIndex + 1}
+                                    </span>
+                                    <span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-md text-xs font-bold shadow-sm">
+                                        Bobot Nilai: ${q.bobot || 0}
+                                    </span>
+                                </div>
                                 <span class="text-xs text-slate-400 font-medium">${q.type === 'pg' ? 'Pilihan Ganda' : 'Essay'}</span>
                             </div>
+
+                            ${q.gambar ? `<div class="mb-5"><img src="${q.gambar}" alt="Gambar Soal" class="max-w-full md:max-w-md h-auto rounded-lg border border-slate-200 shadow-sm"></div>` : ''}
+
                             <div class="text-base md:text-lg text-slate-800 leading-relaxed font-medium">
                                 ${q.text}
                             </div>
@@ -614,10 +641,13 @@
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-bold">Manajemen Bank Soal</h2>
                 <div class="flex gap-2">
-                    <button class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-slate-900" onclick="openBuatSoalModal()">
+                    <button class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-green-700 transition" onclick="downloadTemplateSoal()">
+                        <i class="fas fa-download mr-2"></i>Template Soal
+                    </button>
+                    <button class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-slate-900 transition" onclick="openBuatSoalModal()">
                         <i class="fas fa-plus mr-2"></i>Buat Soal
                     </button>
-                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Fitur Import Soal Format JSON/Excel/Word', 'info')">
+                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700 transition" onclick="showToast('Fitur Import Soal Format JSON/Excel/Word', 'info')">
                         <i class="fas fa-file-import mr-2"></i>Import Soal
                     </button>
                 </div>
@@ -678,6 +708,7 @@
         const tabs = [
             { id: 'monitor', icon: 'fa-desktop', label: 'Monitor Ujian' },
             { id: 'pengguna', icon: 'fa-users', label: 'Manajemen Pengguna' },
+            { id: 'master', icon: 'fa-database', label: 'Data Master' },
             { id: 'koreksi', icon: 'fa-robot', label: 'Koreksi AI' },
             { id: 'rekap', icon: 'fa-table', label: 'Rekap Nilai' },
         ];
@@ -729,6 +760,32 @@
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">
                     <i class="fas fa-users-cog text-4xl mb-3 text-slate-300"></i>
                     <p>Integrasi Supabase Auth untuk manajemen data Siswa dan data Guru.</p>
+                </div>
+            `;
+        } else if (adminActiveTab === 'master') {
+            content = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Data Master (Mapel & Kelas)</h2>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-slate-800">Mata Pelajaran</h3>
+                            <button class="text-blue-600 text-sm hover:underline font-medium" onclick="showToast('Fitur Tambah Mapel (Admin)', 'info')">+ Tambah Mapel</button>
+                        </div>
+                        <ul class="space-y-2">
+                            ${state.mapel.map(m => `<li class="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm font-medium text-slate-700 flex justify-between"><span>${m}</span> <button class="text-red-400 hover:text-red-600"><i class="fas fa-trash-alt"></i></button></li>`).join('')}
+                        </ul>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold text-slate-800">Daftar Kelas</h3>
+                            <button class="text-blue-600 text-sm hover:underline font-medium" onclick="showToast('Fitur Tambah Kelas (Admin)', 'info')">+ Tambah Kelas</button>
+                        </div>
+                        <ul class="space-y-2">
+                            ${state.kelas.map(k => `<li class="p-3 bg-slate-50 rounded-lg border border-slate-100 text-sm font-medium text-slate-700 flex justify-between"><span>Kelas ${k}</span> <button class="text-red-400 hover:text-red-600"><i class="fas fa-trash-alt"></i></button></li>`).join('')}
+                        </ul>
+                    </div>
                 </div>
             `;
         } else if (adminActiveTab === 'koreksi') {
@@ -820,18 +877,51 @@
         // TODO: Integrate with jsPDF or SheetJS for client-side export, or trigger GAS Webhook
     }
 
+    function downloadTemplateSoal() {
+        const csvContent = "data:text/csv;charset=utf-8,Jenis,Mapel,Kelas,Bobot,Pertanyaan,Gambar_URL,Opsi_A,Opsi_B,Opsi_C,Opsi_D,Kunci\npg,Matematika,7A,10,Berapa hasil dari $1+1$?,https://link-gambar.com/img.jpg,1,2,3,4,1\nessay,IPA,8A,20,Jelaskan proses fotosintesis!,,,,,Cahaya Matahari\n";
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", "Template_Soal_CBT_Abu_Zairi.csv");
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        showToast('Template soal berhasil diunduh.', 'success');
+    }
+
     // --- FITUR GURU: BUAT SOAL MANUAL ---
     function openBuatSoalModal() {
         const modal = document.createElement('div');
         modal.id = 'buat-soal-modal';
         modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
         modal.innerHTML = `
-            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4 border-b pb-3">
                     <h3 class="text-xl font-bold text-slate-800">Buat Soal Baru</h3>
                     <button onclick="closeBuatSoalModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
                 </div>
                 <form onsubmit="saveSoal(event)" class="space-y-4 text-left">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Mata Pelajaran <span class="text-red-500">*</span></label>
+                            <select id="input-mapel" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">-- Pilih Mapel --</option>
+                                ${state.mapel.map(m => `<option value="${m}">${m}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Kelas <span class="text-red-500">*</span></label>
+                            <select id="input-kelas" required class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">-- Pilih Kelas --</option>
+                                ${state.kelas.map(k => `<option value="${k}">${k}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Bobot Nilai <span class="text-red-500">*</span></label>
+                            <input type="number" id="input-bobot" required min="1" max="100" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: 10">
+                        </div>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Jenis Soal</label>
                         <select id="input-jenis" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="toggleOpsiJawaban()">
@@ -839,9 +929,16 @@
                             <option value="essay">Essay</option>
                         </select>
                     </div>
+
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Pertanyaan</label>
-                        <textarea id="input-pertanyaan" required rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik pertanyaan di sini..."></textarea>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Gambar (Opsional)</label>
+                        <input type="file" id="input-gambar" accept="image/*" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <p class="text-xs text-slate-500 mt-1">Sistem menerima gambar dengan format JPG, PNG, atau GIF.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Pertanyaan <span class="text-red-500">*</span></label>
+                        <textarea id="input-pertanyaan" required rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik pertanyaan... (Gunakan $rumus$ untuk matematika sebaris, atau $$rumus$$ untuk blok baru)"></textarea>
                     </div>
                     
                     <div id="container-opsi" class="space-y-3">
@@ -914,9 +1011,20 @@
         btnSimpan.disabled = true;
         btnSimpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
 
+        const mapel = document.getElementById('input-mapel').value;
+        const kelas = document.getElementById('input-kelas').value;
+        const bobot = document.getElementById('input-bobot').value;
         const jenis = document.getElementById('input-jenis').value;
         const pertanyaan = document.getElementById('input-pertanyaan').value;
+        const fileInput = document.getElementById('input-gambar');
         
+        let gambarUrl = null;
+        if (fileInput.files && fileInput.files[0]) {
+            // Karena kita belum mengonfigurasi Supabase Storage untuk file fisik, 
+            // kita ubah gambarnya menjadi link Object URL agar bisa dipreview di layar.
+            gambarUrl = URL.createObjectURL(fileInput.files[0]);
+        }
+
         let opsi_jawaban = null;
         let kunci_jawaban = null;
 
@@ -938,15 +1046,19 @@
         }
 
         try {
-            // Menyimpan ke database Supabase tabel 'soal'
+            // Menyimpan ke database Supabase
             const { data, error } = await supabaseClient
                 .from('soal')
                 .insert([
                     { 
+                        mapel: mapel,
+                        kelas: kelas,
+                        bobot: parseInt(bobot),
                         jenis: jenis, 
                         pertanyaan: pertanyaan, 
                         opsi_jawaban: opsi_jawaban, 
-                        kunci_jawaban: kunci_jawaban 
+                        kunci_jawaban: kunci_jawaban,
+                        gambar_url: gambarUrl // Membutuhkan kolom 'gambar_url' di Supabase
                     }
                 ])
                 .select();
@@ -958,7 +1070,7 @@
 
         } catch (error) {
             console.error('Error saving soal:', error);
-            showToast('Gagal menyimpan: ' + error.message, 'error');
+            showToast('Gagal menyimpan: Pastikan kolom database Supabase sudah diupdate', 'error');
         } finally {
             if(document.getElementById('btn-simpan-soal')) {
                 btnSimpan.disabled = false;
