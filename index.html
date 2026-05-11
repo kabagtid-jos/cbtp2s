@@ -84,7 +84,8 @@
             bobotPG: 10,
             bobotEssay: 20,
             targetPG: 20,
-            targetEssay: 5
+            targetEssay: 5,
+            daftarSoal: [] // Tambahan: Menyimpan soal yang diambil dari database
         },
         cbt: {
             questions: [
@@ -137,7 +138,11 @@
             case 'token-entry': app.innerHTML = getTokenEntryHTML(); break;
             case 'cbt-exam': app.innerHTML = getCBTExamHTML(); attachCBTListeners(); break;
             case 'cbt-result': app.innerHTML = getCBTResultHTML(); break;
-            case 'guru-dashboard': app.innerHTML = getGuruDashboardHTML(); break;
+            case 'guru-dashboard': 
+                app.innerHTML = getGuruDashboardHTML(); 
+                // Auto-load bank soal saat membuka dashboard guru
+                if (guruActiveTab === 'soal') loadDaftarSoal(); 
+                break;
             case 'admin-dashboard': app.innerHTML = getAdminDashboardHTML(); break;
         }
 
@@ -713,6 +718,32 @@
                 </div>
                 <p class="text-xs text-slate-500 mt-3"><i class="fas fa-info-circle"></i> Pastikan Anda telah mengisi Mapel dan Kelas di Pengaturan Identitas sebelum melakukan Import atau Buat Soal Manual.</p>
             </div>
+
+            <!-- Panel 3: Daftar Bank Soal (Telah Diperbarui menjadi Grouping) -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h3 class="text-lg font-bold text-slate-800">
+                        <i class="fas fa-database mr-2 text-purple-500"></i> 3. Bank Soal Tersimpan
+                    </h3>
+                    <button onclick="loadDaftarSoal()" class="text-sm text-blue-600 hover:underline"><i class="fas fa-sync-alt"></i> Muat Ulang</button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                <th class="p-3 font-medium">Mata Pelajaran</th>
+                                <th class="p-3 font-medium w-32">Kelas</th>
+                                <th class="p-3 font-medium w-24 text-center">PG</th>
+                                <th class="p-3 font-medium w-24 text-center">Essay</th>
+                                <th class="p-3 font-medium w-32 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body-bank-soal">
+                            <tr><td colspan="5" class="text-center p-4 text-blue-500"><i class="fas fa-spinner fa-spin mr-2"></i>Memuat bank soal...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         `;
 
         return `
@@ -940,6 +971,224 @@
         } else {
             state.guruSetup[key] = value;
         }
+        
+        // Sinkronkan state untuk progress modal (tanpa harus memuat ulang DB terus menerus)
+        if (state.guruSetup.mapel && state.guruSetup.kelas && state.guruSetup.bankSoal) {
+            const activeGroup = state.guruSetup.bankSoal.find(g => g.mapel === state.guruSetup.mapel && g.kelas === state.guruSetup.kelas);
+            state.guruSetup.daftarSoal = activeGroup ? activeGroup.soalList : [];
+            updateProgressUI();
+        }
+    }
+
+    async function loadDaftarSoal() {
+        try {
+            const tbody = document.getElementById('table-body-bank-soal');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-blue-500"><i class="fas fa-spinner fa-spin mr-2"></i>Memuat data...</td></tr>';
+
+            // Ambil SEMUA soal untuk dikelompokkan
+            const { data, error } = await supabaseClient
+                .from('soal')
+                .select('*')
+                .order('mapel', { ascending: true });
+            
+            if (error) throw error;
+            
+            // Logika Pengelompokan (Grouping) berdasarkan Mapel & Kelas
+            const grouped = {};
+            (data || []).forEach(q => {
+                const key = `${q.mapel}_${q.kelas}`;
+                if (!grouped[key]) {
+                    grouped[key] = { mapel: q.mapel, kelas: q.kelas, pg: 0, essay: 0, soalList: [] };
+                }
+                if (q.jenis === 'pg') grouped[key].pg++;
+                if (q.jenis === 'essay') grouped[key].essay++;
+                grouped[key].soalList.push(q);
+            });
+            
+            state.guruSetup.bankSoal = Object.values(grouped);
+            
+            // Sinkronkan daftarSoal untuk Modal Buat Soal aktif
+            if (state.guruSetup.mapel && state.guruSetup.kelas) {
+                const activeGroup = state.guruSetup.bankSoal.find(g => g.mapel === state.guruSetup.mapel && g.kelas === state.guruSetup.kelas);
+                state.guruSetup.daftarSoal = activeGroup ? activeGroup.soalList : [];
+                updateProgressUI();
+            } else {
+                state.guruSetup.daftarSoal = [];
+            }
+
+            renderTableBankSoal();
+
+        } catch (error) {
+            console.error('Error load soal:', error);
+            showToast('Gagal memuat bank soal dari database.', 'error');
+        }
+    }
+
+    function renderTableBankSoal() {
+        const tbody = document.getElementById('table-body-bank-soal');
+        if (!tbody) return;
+        
+        if (!state.guruSetup.bankSoal || state.guruSetup.bankSoal.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-slate-500">Belum ada bank soal tersimpan. Buat atau Import soal pertama Anda.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = state.guruSetup.bankSoal.map((b, idx) => `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                <td class="p-3 text-slate-800 font-medium">${b.mapel}</td>
+                <td class="p-3 text-slate-600">${b.kelas}</td>
+                <td class="p-3 text-center text-slate-600">${b.pg}</td>
+                <td class="p-3 text-center text-slate-600">${b.essay}</td>
+                <td class="p-3 text-center">
+                    <button onclick="lihatDetailBankSoal(${idx})" class="text-blue-500 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded mr-1 text-xs font-bold" title="Lihat Detail"><i class="fas fa-eye mr-1"></i> Detail</button>
+                    <button onclick="hapusBankSoal(${idx})" class="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded text-xs" title="Hapus Semua"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // --- FITUR MODAL DETAIL BANK SOAL ---
+    function lihatDetailBankSoal(idx) {
+        const group = state.guruSetup.bankSoal[idx];
+        if (!group) return;
+        const mapel = group.mapel;
+        const kelas = group.kelas;
+
+        const modal = document.createElement('div');
+        modal.id = 'detail-bank-soal-modal';
+        modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
+        
+        let tableContent = group.soalList.map((s, idx) => `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                <td class="p-3 text-slate-500">${idx + 1}</td>
+                <td class="p-3"><span class="px-2 py-1 rounded text-xs font-bold uppercase ${s.jenis === 'pg' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}">${s.jenis}</span></td>
+                <td class="p-3 text-slate-800 line-clamp-2" title="${s.pertanyaan.replace(/"/g, '&quot;')}">${s.pertanyaan}</td>
+                <td class="p-3 text-slate-600 truncate max-w-[120px]">${s.kunci_jawaban || '-'}</td>
+                <td class="p-3 text-center whitespace-nowrap">
+                    <button onclick="editSoal(${s.id})" class="text-blue-500 hover:text-blue-700 bg-blue-50 p-1.5 rounded mr-1" title="Edit"><i class="fas fa-edit"></i></button>
+                    <button onclick="hapusSoal(${s.id})" class="text-red-500 hover:text-red-700 bg-red-50 p-1.5 rounded" title="Hapus"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+
+        if(group.soalList.length === 0) {
+            tableContent = '<tr><td colspan="5" class="text-center p-4 text-slate-500">Tidak ada soal.</td></tr>';
+        }
+
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <h3 class="text-xl font-bold text-slate-800">Detail Soal: ${mapel} - Kelas ${kelas}</h3>
+                    <button onclick="closeDetailBankSoalModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
+                </div>
+                <div class="overflow-y-auto flex-1 hide-scroll border rounded-lg">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead class="sticky top-0 bg-slate-100 z-10">
+                            <tr class="text-slate-600 border-b">
+                                <th class="p-3 font-medium w-12">No</th>
+                                <th class="p-3 font-medium w-24">Jenis</th>
+                                <th class="p-3 font-medium">Pertanyaan</th>
+                                <th class="p-3 font-medium w-32">Kunci</th>
+                                <th class="p-3 font-medium w-24 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detail-table-body">
+                            ${tableContent}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="pt-4 mt-4 border-t text-right">
+                    <button type="button" onclick="closeDetailBankSoalModal()" class="px-5 py-2 rounded-lg bg-slate-200 text-slate-700 font-medium hover:bg-slate-300 transition">Tutup</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        // Render ulang KaTeX untuk pop-up detail
+        if (window.renderMathInElement) {
+            setTimeout(() => {
+                renderMathInElement(modal, {
+                    delimiters: [
+                        {left: "$$", right: "$$", display: true},
+                        {left: "$", right: "$", display: false}
+                    ]
+                });
+            }, 100);
+        }
+    }
+
+    function closeDetailBankSoalModal() {
+        const modal = document.getElementById('detail-bank-soal-modal');
+        if (modal) modal.remove();
+    }
+
+    // --- FUNGSI HAPUS ---
+    async function hapusSoal(id) {
+        if (!confirm('Anda yakin ingin menghapus soal ini?')) return;
+        
+        try {
+            const { error } = await supabaseClient.from('soal').delete().eq('id', id);
+            if (error) throw error;
+            
+            showToast('Soal berhasil dihapus', 'success');
+            
+            // Tutup modal detail jika sedang terbuka, agar guru melihat tabel utama diperbarui
+            closeDetailBankSoalModal(); 
+            await loadDaftarSoal();
+        } catch (err) {
+            showToast('Gagal menghapus: ' + err.message, 'error');
+        }
+    }
+
+    async function hapusBankSoal(idx) {
+        const group = state.guruSetup.bankSoal[idx];
+        if (!group) return;
+        const mapel = group.mapel;
+        const kelas = group.kelas;
+
+        if (!confirm(`PERINGATAN! Anda yakin ingin menghapus SELURUH soal untuk mata pelajaran ${mapel} - Kelas ${kelas}? Data yang dihapus tidak dapat dikembalikan.`)) return;
+        try {
+            const { error } = await supabaseClient.from('soal').delete()
+                .eq('mapel', mapel)
+                .eq('kelas', kelas);
+            if (error) throw error;
+            
+            showToast(`Bank soal ${mapel} - ${kelas} berhasil dihapus.`, 'success');
+            await loadDaftarSoal();
+        } catch(err) {
+            showToast('Gagal menghapus bank soal: ' + err.message, 'error');
+        }
+    }
+
+    // --- FUNGSI EDIT ---
+    let currentEditSoalId = null; // Variable track Edit Mode
+    function editSoal(id) {
+        // Cari soal dari seluruh bank soal yang telah di-load
+        let soalToEdit = null;
+        if(state.guruSetup.bankSoal) {
+            for(let group of state.guruSetup.bankSoal) {
+                soalToEdit = group.soalList.find(s => s.id === id);
+                if(soalToEdit) break;
+            }
+        }
+        
+        if (!soalToEdit) return;
+        
+        // Tutup modal detail agar tidak menumpuk dengan modal Edit
+        closeDetailBankSoalModal();
+        
+        currentEditSoalId = id;
+        
+        // Pastikan dropdown Mapel dan Kelas di setup utama menyesuaikan dengan soal yang mau di-edit
+        updateGuruSetup('mapel', soalToEdit.mapel);
+        updateGuruSetup('kelas', soalToEdit.kelas);
+        
+        const selMapel = document.getElementById('setup-mapel');
+        if(selMapel) selMapel.value = soalToEdit.mapel;
+        const selKelas = document.getElementById('setup-kelas');
+        if(selKelas) selKelas.value = soalToEdit.kelas;
+
+        openBuatSoalModal(soalToEdit);
     }
 
     function cekSetupDanBukaModal() {
@@ -947,6 +1196,7 @@
             showToast('Silakan pilih Mata Pelajaran dan Kelas di bagian Pengaturan Identitas Ujian terlebih dahulu!', 'error');
             return;
         }
+        currentEditSoalId = null; // Mode Buat Baru
         openBuatSoalModal();
     }
 
@@ -1043,6 +1293,7 @@
                 if(error) throw error;
 
                 showToast(`Sukses! ${json.length} soal berhasil diimport.`, 'success');
+                loadDaftarSoal(); // Refresh tabel setelah import
             } catch (err) {
                 console.error('Error import excel:', err);
                 showToast('Gagal import: ' + err.message, 'error');
@@ -1054,90 +1305,128 @@
     }
 
     // --- FITUR GURU: BUAT SOAL MANUAL ---
-    function openBuatSoalModal() {
+    function openBuatSoalModal(editData = null) {
         const modal = document.createElement('div');
         modal.id = 'buat-soal-modal';
         modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
+        
+        // Hitung Progress Saat Ini
+        const countPG = state.guruSetup.daftarSoal.filter(s => s.jenis === 'pg').length;
+        const countEssay = state.guruSetup.daftarSoal.filter(s => s.jenis === 'essay').length;
+
         modal.innerHTML = `
             <div class="bg-white rounded-xl shadow-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-4 border-b pb-3">
-                    <h3 class="text-xl font-bold text-slate-800">Buat Soal Baru</h3>
+                    <h3 class="text-xl font-bold text-slate-800">${editData ? 'Edit Soal' : 'Buat Soal Baru'}</h3>
                     <button onclick="closeBuatSoalModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
                 </div>
                 
-                <div class="mb-4 p-3 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100 flex items-center gap-3">
-                    <i class="fas fa-info-circle text-blue-500 text-lg"></i> 
+                <div class="mb-4 p-3 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100 flex justify-between items-center">
                     <div>
-                        Menambahkan soal untuk: <strong>${state.guruSetup.mapel}</strong> (Kelas ${state.guruSetup.kelas}). <br>
-                        <span class="text-xs text-blue-600">Bobot telah disesuaikan berdasarkan pengaturan awal Anda.</span>
+                        <strong>${state.guruSetup.mapel}</strong> (Kelas ${state.guruSetup.kelas}). <br>
+                        <span class="text-xs text-blue-600">Bobot disesuaikan pengaturan.</span>
+                    </div>
+                    <div class="text-right bg-white px-3 py-1.5 rounded border border-blue-200 shadow-sm">
+                        <div class="font-bold text-xs text-slate-500 uppercase tracking-wide border-b pb-1 mb-1">Progress Ujian</div>
+                        <div class="text-xs font-medium">PG: <span id="prog-pg" class="${countPG >= state.guruSetup.targetPG ? 'text-green-600' : ''}">${countPG}</span> / ${state.guruSetup.targetPG}</div>
+                        <div class="text-xs font-medium">Essay: <span id="prog-es" class="${countEssay >= state.guruSetup.targetEssay ? 'text-green-600' : ''}">${countEssay}</span> / ${state.guruSetup.targetEssay}</div>
                     </div>
                 </div>
 
-                <form onsubmit="saveSoal(event)" class="space-y-4 text-left">
+                <form onsubmit="saveSoal(event)" id="form-buat-soal" class="space-y-4 text-left">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Jenis Soal</label>
-                        <select id="input-jenis" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="toggleOpsiJawaban()">
-                            <option value="pg">Pilihan Ganda</option>
-                            <option value="essay">Essay</option>
+                        <select id="input-jenis" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50" onchange="toggleOpsiJawaban()" ${editData ? 'disabled' : ''}>
+                            <option value="pg" ${editData && editData.jenis === 'pg' ? 'selected' : ''}>Pilihan Ganda</option>
+                            <option value="essay" ${editData && editData.jenis === 'essay' ? 'selected' : ''}>Essay</option>
                         </select>
+                        ${editData ? '<p class="text-xs text-red-400 mt-1">Jenis soal tidak dapat diubah saat mode Edit.</p>' : ''}
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Gambar (Opsional)</label>
                         <input type="file" id="input-gambar" accept="image/*" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                        <p class="text-xs text-slate-500 mt-1">Sistem menerima gambar dengan format JPG, PNG, atau GIF.</p>
+                        ${editData && editData.gambar_url ? `<p class="text-xs text-blue-500 mt-1"><i class="fas fa-check"></i> Soal ini sudah memiliki gambar.</p>` : ''}
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1">Pertanyaan <span class="text-red-500">*</span></label>
-                        <textarea id="input-pertanyaan" required rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik pertanyaan... (Gunakan $rumus$ untuk matematika sebaris, atau $$rumus$$ untuk blok baru)"></textarea>
+                        <textarea id="input-pertanyaan" required rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik pertanyaan... (Gunakan $rumus$ untuk matematika sebaris)">${editData ? editData.pertanyaan : ''}</textarea>
                     </div>
                     
                     <div id="container-opsi" class="space-y-3">
                         <label class="block text-sm font-medium text-slate-700 mb-1">Opsi Jawaban & Kunci</label>
                         <div class="flex items-center gap-2">
-                            <input type="radio" name="kunci_pg" value="0" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <input type="radio" name="kunci_pg" value="0" id="radio-a" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
                             <span class="font-bold text-slate-700 w-5">A.</span>
-                            <input type="text" id="opsi-a" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan A" required>
+                            <input type="text" id="opsi-a" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan A" required value="${editData && editData.jenis === 'pg' ? editData.opsi_jawaban[0] : ''}">
                         </div>
                         <div class="flex items-center gap-2">
-                            <input type="radio" name="kunci_pg" value="1" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <input type="radio" name="kunci_pg" value="1" id="radio-b" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
                             <span class="font-bold text-slate-700 w-5">B.</span>
-                            <input type="text" id="opsi-b" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan B" required>
+                            <input type="text" id="opsi-b" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan B" required value="${editData && editData.jenis === 'pg' ? editData.opsi_jawaban[1] : ''}">
                         </div>
                         <div class="flex items-center gap-2">
-                            <input type="radio" name="kunci_pg" value="2" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <input type="radio" name="kunci_pg" value="2" id="radio-c" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
                             <span class="font-bold text-slate-700 w-5">C.</span>
-                            <input type="text" id="opsi-c" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan C" required>
+                            <input type="text" id="opsi-c" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan C" required value="${editData && editData.jenis === 'pg' ? editData.opsi_jawaban[2] : ''}">
                         </div>
                         <div class="flex items-center gap-2">
-                            <input type="radio" name="kunci_pg" value="3" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <input type="radio" name="kunci_pg" value="3" id="radio-d" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
                             <span class="font-bold text-slate-700 w-5">D.</span>
-                            <input type="text" id="opsi-d" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan D" required>
+                            <input type="text" id="opsi-d" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan D" required value="${editData && editData.jenis === 'pg' ? editData.opsi_jawaban[3] : ''}">
                         </div>
                         <p class="text-xs text-slate-500 mt-1"><i class="fas fa-info-circle"></i> Pilih salah satu radio button di sebelah kiri sebagai Kunci Jawaban.</p>
                     </div>
 
                     <div id="container-kunci-essay" class="hidden">
                         <label class="block text-sm font-medium text-slate-700 mb-1">Kata Kunci Jawaban (Untuk Koreksi AI)</label>
-                        <textarea id="input-kunci-essay" rows="2" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: merdeka, proklamasi, 1945..."></textarea>
+                        <textarea id="input-kunci-essay" rows="2" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: merdeka, proklamasi, 1945...">${editData && editData.jenis === 'essay' ? editData.kunci_jawaban : ''}</textarea>
                     </div>
 
                     <div class="pt-4 flex justify-end gap-3 border-t mt-4">
-                        <button type="button" onclick="closeBuatSoalModal()" class="px-5 py-2 rounded-lg bg-slate-200 text-slate-700 font-medium hover:bg-slate-300 transition">Batal</button>
+                        <button type="button" onclick="closeBuatSoalModal()" class="px-5 py-2 rounded-lg bg-slate-200 text-slate-700 font-medium hover:bg-slate-300 transition">Tutup</button>
                         <button type="submit" id="btn-simpan-soal" class="px-5 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition flex items-center gap-2">
-                            <i class="fas fa-save"></i> Simpan Soal
+                            <i class="fas ${editData ? 'fa-check' : 'fa-paper-plane'}"></i> ${editData ? 'Simpan Perubahan' : 'Simpan & Lanjut'}
                         </button>
                     </div>
                 </form>
             </div>
         `;
         document.body.appendChild(modal);
+        
+        // Jalankan toggle untuk memastikan form menyesuaikan PG/Essay
+        toggleOpsiJawaban();
+
+        // Jika mode edit PG, tandai radio button kuncinya
+        if (editData && editData.jenis === 'pg' && editData.kunci_jawaban) {
+            const indexKunci = editData.opsi_jawaban.indexOf(editData.kunci_jawaban);
+            if (indexKunci === 0) document.getElementById('radio-a').checked = true;
+            if (indexKunci === 1) document.getElementById('radio-b').checked = true;
+            if (indexKunci === 2) document.getElementById('radio-c').checked = true;
+            if (indexKunci === 3) document.getElementById('radio-d').checked = true;
+        }
+    }
+
+    function updateProgressUI() {
+        const progPG = document.getElementById('prog-pg');
+        const progEs = document.getElementById('prog-es');
+        if(!progPG || !progEs) return;
+
+        const countPG = state.guruSetup.daftarSoal.filter(s => s.jenis === 'pg').length;
+        const countEssay = state.guruSetup.daftarSoal.filter(s => s.jenis === 'essay').length;
+        
+        progPG.innerText = countPG;
+        progEs.innerText = countEssay;
+        
+        if(countPG >= state.guruSetup.targetPG) progPG.classList.add('text-green-600');
+        if(countEssay >= state.guruSetup.targetEssay) progEs.classList.add('text-green-600');
     }
 
     function closeBuatSoalModal() {
         const modal = document.getElementById('buat-soal-modal');
         if (modal) modal.remove();
+        currentEditSoalId = null; // Reset track edit
     }
 
     function toggleOpsiJawaban() {
@@ -1172,11 +1461,12 @@
         const pertanyaan = document.getElementById('input-pertanyaan').value;
         const fileInput = document.getElementById('input-gambar');
         
-        let gambarUrl = null;
+        let gambarUrl = null; // Pada mode edit, idealnya mempertahankan gambar lama jika tidak upload baru
         if (fileInput.files && fileInput.files[0]) {
-            // Karena kita belum mengonfigurasi Supabase Storage untuk file fisik, 
-            // kita ubah gambarnya menjadi link Object URL agar bisa dipreview di layar.
-            gambarUrl = URL.createObjectURL(fileInput.files[0]);
+            gambarUrl = URL.createObjectURL(fileInput.files[0]); // Object URL sementara
+        } else if (currentEditSoalId) {
+             const oldSoal = state.guruSetup.daftarSoal.find(s => s.id === currentEditSoalId);
+             gambarUrl = oldSoal ? oldSoal.gambar_url : null;
         }
 
         let opsi_jawaban = null;
@@ -1199,36 +1489,55 @@
             kunci_jawaban = document.getElementById('input-kunci-essay').value;
         }
 
+        const payload = { 
+            mapel: mapel,
+            kelas: kelas,
+            bobot: bobot,
+            jenis: jenis, 
+            pertanyaan: pertanyaan, 
+            opsi_jawaban: opsi_jawaban, 
+            kunci_jawaban: kunci_jawaban,
+            gambar_url: gambarUrl 
+        };
+
         try {
-            // Menyimpan ke database Supabase
-            const { data, error } = await supabaseClient
-                .from('soal')
-                .insert([
-                    { 
-                        mapel: mapel,
-                        kelas: kelas,
-                        bobot: bobot,
-                        jenis: jenis, 
-                        pertanyaan: pertanyaan, 
-                        opsi_jawaban: opsi_jawaban, 
-                        kunci_jawaban: kunci_jawaban,
-                        gambar_url: gambarUrl 
-                    }
-                ])
-                .select();
+            if (currentEditSoalId) {
+                // UPDATE SOAL
+                const { error } = await supabaseClient.from('soal').update(payload).eq('id', currentEditSoalId);
+                if (error) throw error;
+                showToast('Perubahan soal berhasil disimpan!', 'success');
+                closeBuatSoalModal(); // Tutup jika update
+            } else {
+                // INSERT SOAL BARU
+                const { error } = await supabaseClient.from('soal').insert([payload]);
+                if (error) throw error;
+                
+                showToast('Soal berhasil ditambahkan. Lanjut soal berikutnya.', 'success');
+                
+                // MENGOSONGKAN FORM AGAR BISA LANJUT (Continuous Input)
+                document.getElementById('input-pertanyaan').value = '';
+                document.getElementById('input-gambar').value = '';
+                if(jenis === 'pg') {
+                    document.getElementById('opsi-a').value = '';
+                    document.getElementById('opsi-b').value = '';
+                    document.getElementById('opsi-c').value = '';
+                    document.getElementById('opsi-d').value = '';
+                    document.querySelectorAll('input[name="kunci_pg"]').forEach(r => r.checked = false);
+                } else {
+                    document.getElementById('input-kunci-essay').value = '';
+                }
+            }
 
-            if (error) throw error;
-
-            showToast('Soal berhasil disimpan ke Database!', 'success');
-            closeBuatSoalModal();
+            // Memuat ulang daftar soal di balik layar (agar tabel ter-update & angka progress berubah)
+            await loadDaftarSoal();
 
         } catch (error) {
             console.error('Error saving soal:', error);
-            showToast('Gagal menyimpan: Pastikan kolom database Supabase sudah diupdate', 'error');
+            showToast('Gagal menyimpan: ' + error.message, 'error');
         } finally {
             if(document.getElementById('btn-simpan-soal')) {
                 btnSimpan.disabled = false;
-                btnSimpan.innerHTML = '<i class="fas fa-save"></i> Simpan Soal';
+                btnSimpan.innerHTML = `<i class="fas ${currentEditSoalId ? 'fa-check' : 'fa-paper-plane'}"></i> ${currentEditSoalId ? 'Simpan Perubahan' : 'Simpan & Lanjut'}`;
             }
         }
     }
