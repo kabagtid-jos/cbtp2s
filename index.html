@@ -30,11 +30,6 @@
             animation: slideIn 0.3s ease-out forwards;
         }
     </style>
-  <script src="[https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2](https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2)"></script>
-<script>
-  // Ganti URL dan API_KEY di bawah ini dengan milik Anda dari Langkah 1
-  const supabase = supabase.createClient('https://rmokqxewlajmgnkbhxab.supabase.co/rest/v1/', 'sb_publishable_G5lEH2FuhnwmLaetj3otDQ_PoWqsxsX');
-</script>
 </head>
 <body class="text-slate-800 antialiased h-screen flex flex-col overflow-hidden">
 
@@ -46,14 +41,28 @@
         <!-- Rendered Content Will Go Here -->
     </div>
 
+<!-- Tambahkan Library Supabase -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
+    // ==========================================
+    // KONFIGURASI SUPABASE & APPS SCRIPT
+    // ==========================================
+    // 1. Supabase Config (Ganti dengan milik Anda)
+    const SUPABASE_URL = 'https://rmokqxewlajmgnkbhxab.supabase.co/rest/v1/';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtb2txeGV3bGFqbWdua2JoeGFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDk2MDEsImV4cCI6MjA5NDA4NTYwMX0.e3Xyc79055zVaO5pXYcyna_ksICED_NDZqHO_D4tJXE';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // 2. Apps Script Config (Ganti dengan URL Web App Apps Script Anda)
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw0PUgwdvYFibsOea94_3w8Jod-XtxWxXsX8LxvK7hMYWtdA5q9npBgY0lOhwfGSn5dcw/exec';
+
     /* ==========================================
        STATE MANAGEMENT & MOCK DATA
        ========================================== */
     // Note: In production, replace mock data with Supabase calls.
     const state = {
-        view: 'login', // login, token-entry, cbt-exam, cbt-result, guru-dashboard
-        role: null, // 'siswa' or 'guru'
+        view: 'login', // login, token-entry, cbt-exam, cbt-result, guru-dashboard, admin-dashboard
+        role: null, // 'siswa', 'guru', or 'admin'
         user: null,
         examToken: 'ABUZAIRI2026',
         cbt: {
@@ -108,6 +117,7 @@
             case 'cbt-exam': app.innerHTML = getCBTExamHTML(); attachCBTListeners(); break;
             case 'cbt-result': app.innerHTML = getCBTResultHTML(); break;
             case 'guru-dashboard': app.innerHTML = getGuruDashboardHTML(); break;
+            case 'admin-dashboard': app.innerHTML = getAdminDashboardHTML(); break;
         }
     }
 
@@ -129,17 +139,18 @@
                         <div class="flex gap-2 mb-6 bg-slate-100 p-1 rounded-lg">
                             <button onclick="switchLoginRole('siswa')" id="btn-role-siswa" class="flex-1 py-2 rounded-md font-medium bg-white shadow text-blue-600 transition">Siswa</button>
                             <button onclick="switchLoginRole('guru')" id="btn-role-guru" class="flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition">Guru</button>
+                            <button onclick="switchLoginRole('admin')" id="btn-role-admin" class="flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition">Admin</button>
                         </div>
                         <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Username / NIS</label>
-                                <input type="text" id="username" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Masukkan username">
+                                <input type="text" id="username" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Masukkan username atau NIS">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
                                 <input type="password" id="password" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Masukkan password">
                             </div>
-                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition mt-4">
+                            <button type="submit" id="btn-login-submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition mt-4 flex justify-center items-center gap-2">
                                 Masuk Aplikasi
                             </button>
                         </form>
@@ -152,25 +163,74 @@
     let currentLoginRole = 'siswa';
     function switchLoginRole(role) {
         currentLoginRole = role;
-        document.getElementById('btn-role-siswa').className = role === 'siswa' ? 'flex-1 py-2 rounded-md font-medium bg-white shadow text-blue-600 transition' : 'flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
-        document.getElementById('btn-role-guru').className = role === 'guru' ? 'flex-1 py-2 rounded-md font-medium bg-white shadow text-blue-600 transition' : 'flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+        const roles = ['siswa', 'guru', 'admin'];
+        roles.forEach(r => {
+            const btn = document.getElementById(`btn-role-${r}`);
+            if (r === role) {
+                btn.className = 'flex-1 py-2 rounded-md font-medium bg-white shadow text-blue-600 transition';
+            } else {
+                btn.className = 'flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+            }
+        });
     }
 
-    function handleLogin(e) {
+    async function handleLogin(e) {
         e.preventDefault();
-        const user = document.getElementById('username').value;
-        // TODO: SUPABASE AUTH HERE (supabase.auth.signInWithPassword)
-        // Mocking login success
-        state.role = currentLoginRole;
-        state.user = { name: user };
-        
-        if (state.role === 'siswa') {
-            state.view = 'token-entry';
-        } else {
-            state.view = 'guru-dashboard';
+        const usernameInput = document.getElementById('username').value.trim();
+        const passwordInput = document.getElementById('password').value;
+        const btnSubmit = document.getElementById('btn-login-submit');
+
+        // Ubah tampilan tombol saat loading
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Memeriksa...';
+
+        try {
+            // Trik merubah Username/NIS menjadi format Email yang diminta Supabase Auth
+            let emailLogin = usernameInput;
+            if (!emailLogin.includes('@')) {
+                emailLogin = emailLogin + '@cbt.com'; 
+            }
+
+            // PROSES AUTH KE SUPABASE
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: emailLogin,
+                password: passwordInput,
+            });
+
+            if (error) {
+                throw error;
+            }
+
+            // LOGIN BERHASIL
+            state.role = currentLoginRole;
+            // Ambil nama dari email (contoh: 'admin@cbt.com' jadi 'admin')
+            state.user = { name: usernameInput.split('@')[0], authData: data.user };
+            
+            if (state.role === 'siswa') {
+                state.view = 'token-entry';
+            } else if (state.role === 'guru') {
+                state.view = 'guru-dashboard';
+            } else {
+                state.view = 'admin-dashboard';
+            }
+            
+            render();
+            showToast(`Login berhasil! Selamat datang.`, 'success');
+
+        } catch (error) {
+            // LOGIN GAGAL (Password salah / User tidak ditemukan)
+            let pesanError = "Terjadi kesalahan saat login.";
+            if (error.message.includes("Invalid login credentials")) {
+                pesanError = "Username/NIS atau Password salah!";
+            } else if (error.message.includes("Email not confirmed")) {
+                pesanError = "Akun belum diverifikasi.";
+            }
+            showToast(pesanError, 'error');
+            
+            // Kembalikan tombol seperti semula
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = 'Masuk Aplikasi';
         }
-        render();
-        showToast(`Selamat datang, ${user}!`, 'success');
     }
 
     // 2. SISWA TOKEN ENTRY VIEW
@@ -445,29 +505,50 @@
         };
     }
 
-    function finishExam(isTimeout) {
+    async function finishExam(isTimeout) {
         window.onbeforeunload = null; // remove warning
         clearInterval(state.cbt.timerInterval);
         
-        fetch('https://script.google.com/macros/s/AKfycbw0PUgwdvYFibsOea94_3w8Jod-XtxWxXsX8LxvK7hMYWtdA5q9npBgY0lOhwfGSn5dcw/exec', { // Ganti dengan URL dari Langkah 2
-    method: 'POST',
-    body: JSON.stringify({
-        nis: "12345",
-        namaSiswa: state.user.name,
-        token: state.examToken,
-        skorPG: 80, // Ini disesuaikan dengan logika perhitungan nilai Anda nanti
-        skorEssay: 15
-    })
-});
-        
-        if (isTimeout) {
-            showToast('Waktu habis! Jawaban otomatis dikirim.', 'info');
-        } else {
-            showToast('Ujian selesai. Jawaban berhasil dikirim.', 'success');
+        showToast('Mengirim jawaban...', 'info');
+
+        try {
+            // TODO: Supabase Submit Final Data
+
+            // Trigger Apps Script Webhook untuk Sync ke Spreadsheet
+            if (APPS_SCRIPT_URL !== 'GANTI_DENGAN_URL_WEB_APP_APPS_SCRIPT_ANDA') {
+                // Hitung simulasi skor
+                let skorPG = 0;
+                state.cbt.questions.forEach(q => {
+                    if (q.type === 'pg' && q.answer) skorPG += 20; // simulasi skor
+                });
+
+                await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        nis: state.user.name,
+                        namaSiswa: state.user.name,
+                        token: state.examToken,
+                        skorPG: skorPG,
+                        skorEssay: 0 // Default 0
+                    })
+                });
+            } else {
+                console.warn('URL Apps Script belum diisi!');
+            }
+
+            if (isTimeout) {
+                showToast('Waktu habis! Jawaban otomatis dikirim.', 'info');
+            } else {
+                showToast('Ujian selesai. Jawaban berhasil dikirim.', 'success');
+            }
+            
+            state.view = 'cbt-result';
+            render();
+
+        } catch (error) {
+            showToast('Terjadi kesalahan saat mengirim jawaban.', 'error');
+            console.error('Error submitting exam:', error);
         }
-        
-        state.view = 'cbt-result';
-        render();
     }
 
     function getCBTResultHTML() {
@@ -487,18 +568,87 @@
         `;
     }
 
-    // 4. GURU DASHBOARD
-    let guruActiveTab = 'monitor';
+    // 4. GURU DASHBOARD (KHUSUS MANAJEMEN SOAL)
+    let guruActiveTab = 'soal';
     function getGuruDashboardHTML() {
         const tabs = [
-            { id: 'monitor', icon: 'fa-desktop', label: 'Monitor' },
-            { id: 'soal', icon: 'fa-file-alt', label: 'Bank Soal' },
+            { id: 'soal', icon: 'fa-file-alt', label: 'Manajemen Soal' }
+        ];
+
+        let content = `
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold">Manajemen Bank Soal</h2>
+                <div class="flex gap-2">
+                    <button class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-slate-900" onclick="showToast('Fitur Buat Soal Manual', 'info')">
+                        <i class="fas fa-plus mr-2"></i>Buat Soal
+                    </button>
+                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Fitur Import Soal Format JSON/Excel/Word', 'info')">
+                        <i class="fas fa-file-import mr-2"></i>Import Soal
+                    </button>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">
+                <i class="fas fa-box-open text-4xl mb-3 text-slate-300"></i>
+                <p>Integrasi database Supabase akan menampilkan daftar soal ujian di sini.</p>
+                <p class="text-sm mt-2">Sebagai Guru, Anda memiliki akses penuh untuk menambah, mengedit, dan menghapus bank soal.</p>
+            </div>
+        `;
+
+        return `
+            <div class="flex h-full bg-slate-50">
+                <!-- Sidebar -->
+                <aside class="w-64 bg-slate-900 text-white flex flex-col hidden md:flex">
+                    <div class="p-6">
+                        <h1 class="font-bold text-xl flex items-center gap-3">
+                            <i class="fas fa-chalkboard-teacher text-green-400"></i> Panel Guru
+                        </h1>
+                        <p class="text-slate-400 text-xs mt-1">Pembuat Soal CBT</p>
+                    </div>
+                    <nav class="flex-1 px-4 space-y-2 mt-4">
+                        ${tabs.map(tab => `
+                            <button onclick="switchGuruTab('${tab.id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${guruActiveTab === tab.id ? 'bg-green-600 text-white font-medium' : 'text-slate-300 hover:bg-slate-800'}">
+                                <i class="fas ${tab.icon} w-5"></i> ${tab.label}
+                            </button>
+                        `).join('')}
+                    </nav>
+                    <div class="p-4 border-t border-slate-800">
+                        <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-red-400 hover:bg-slate-800 transition">
+                            <i class="fas fa-sign-out-alt w-5"></i> Logout
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- Mobile Header & Content -->
+                <div class="flex-1 flex flex-col h-full overflow-hidden">
+                    <header class="md:hidden bg-slate-900 text-white px-4 py-3 flex justify-between items-center">
+                        <div class="font-bold"><i class="fas fa-chalkboard-teacher text-green-400 mr-2"></i> Panel Guru</div>
+                        <button onclick="logout()" class="text-red-400"><i class="fas fa-sign-out-alt"></i></button>
+                    </header>
+                    <main class="flex-1 overflow-y-auto p-4 md:p-8">
+                        ${content}
+                    </main>
+                </div>
+            </div>
+        `;
+    }
+
+    function switchGuruTab(tabId) {
+        guruActiveTab = tabId;
+        render();
+    }
+
+    // 5. ADMIN DASHBOARD (SEMUA FITUR UMUM CBT)
+    let adminActiveTab = 'monitor';
+    function getAdminDashboardHTML() {
+        const tabs = [
+            { id: 'monitor', icon: 'fa-desktop', label: 'Monitor Ujian' },
+            { id: 'pengguna', icon: 'fa-users', label: 'Manajemen Pengguna' },
             { id: 'koreksi', icon: 'fa-robot', label: 'Koreksi AI' },
             { id: 'rekap', icon: 'fa-table', label: 'Rekap Nilai' },
         ];
 
         let content = '';
-        if (guruActiveTab === 'monitor') {
+        if (adminActiveTab === 'monitor') {
             content = `
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold">Monitor Peserta Ujian</h2>
@@ -533,20 +683,20 @@
                     </table>
                 </div>
             `;
-        } else if (guruActiveTab === 'soal') {
+        } else if (adminActiveTab === 'pengguna') {
             content = `
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold">Manajemen Bank Soal</h2>
-                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Fitur Upload Format JSON/Excel', 'info')">
-                        <i class="fas fa-upload mr-2"></i>Upload Soal
+                    <h2 class="text-xl font-bold">Manajemen Pengguna</h2>
+                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Tambah Pengguna Baru', 'info')">
+                        <i class="fas fa-user-plus mr-2"></i>Tambah Data
                     </button>
                 </div>
                 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">
-                    <i class="fas fa-box-open text-4xl mb-3 text-slate-300"></i>
-                    <p>Integrasi database Supabase akan menampilkan soal di sini.</p>
+                    <i class="fas fa-users-cog text-4xl mb-3 text-slate-300"></i>
+                    <p>Integrasi Supabase Auth untuk manajemen data Siswa dan data Guru.</p>
                 </div>
             `;
-        } else if (guruActiveTab === 'koreksi') {
+        } else if (adminActiveTab === 'koreksi') {
             content = `
                 <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
                     <i class="fas fa-magic text-purple-500"></i> Koreksi Essay Otomatis (AI)
@@ -558,7 +708,7 @@
                     </button>
                 </div>
             `;
-        } else if (guruActiveTab === 'rekap') {
+        } else if (adminActiveTab === 'rekap') {
             content = `
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-xl font-bold">Rekapitulasi Nilai</h2>
@@ -583,13 +733,13 @@
                 <aside class="w-64 bg-slate-900 text-white flex flex-col hidden md:flex">
                     <div class="p-6">
                         <h1 class="font-bold text-xl flex items-center gap-3">
-                            <i class="fas fa-graduation-cap text-blue-400"></i> Admin CBT
+                            <i class="fas fa-user-shield text-blue-400"></i> Admin CBT
                         </h1>
-                        <p class="text-slate-400 text-xs mt-1">Panel Guru P2S Abu Zairi</p>
+                        <p class="text-slate-400 text-xs mt-1">Pusat Kendali P2S Abu Zairi</p>
                     </div>
                     <nav class="flex-1 px-4 space-y-2 mt-4">
                         ${tabs.map(tab => `
-                            <button onclick="switchGuruTab('${tab.id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${guruActiveTab === tab.id ? 'bg-blue-600 text-white font-medium' : 'text-slate-300 hover:bg-slate-800'}">
+                            <button onclick="switchAdminTab('${tab.id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${adminActiveTab === tab.id ? 'bg-blue-600 text-white font-medium' : 'text-slate-300 hover:bg-slate-800'}">
                                 <i class="fas ${tab.icon} w-5"></i> ${tab.label}
                             </button>
                         `).join('')}
@@ -604,14 +754,14 @@
                 <!-- Mobile Header & Content -->
                 <div class="flex-1 flex flex-col h-full overflow-hidden">
                     <header class="md:hidden bg-slate-900 text-white px-4 py-3 flex justify-between items-center">
-                        <div class="font-bold"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i> Panel Guru</div>
+                        <div class="font-bold"><i class="fas fa-user-shield text-blue-400 mr-2"></i> Admin CBT</div>
                         <button onclick="logout()" class="text-red-400"><i class="fas fa-sign-out-alt"></i></button>
                     </header>
                     
                     <!-- Mobile Nav -->
                     <div class="md:hidden flex overflow-x-auto bg-white border-b hide-scroll">
                         ${tabs.map(tab => `
-                            <button onclick="switchGuruTab('${tab.id}')" class="flex-none px-4 py-3 text-sm font-medium border-b-2 transition ${guruActiveTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}">
+                            <button onclick="switchAdminTab('${tab.id}')" class="flex-none px-4 py-3 text-sm font-medium border-b-2 transition ${adminActiveTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}">
                                 <i class="fas ${tab.icon} mr-1"></i> ${tab.label}
                             </button>
                         `).join('')}
@@ -625,8 +775,8 @@
         `;
     }
 
-    function switchGuruTab(tabId) {
-        guruActiveTab = tabId;
+    function switchAdminTab(tabId) {
+        adminActiveTab = tabId;
         render();
     }
 
@@ -635,12 +785,16 @@
         // TODO: Integrate with jsPDF or SheetJS for client-side export, or trigger GAS Webhook
     }
 
-    function logout() {
+    async function logout() {
+        // Keluarkan sesi dari Supabase
+        await supabase.auth.signOut();
+        
         state.view = 'login';
         state.user = null;
         state.role = null;
         clearInterval(state.cbt.timerInterval);
         render();
+        showToast('Anda telah berhasil keluar.', 'info');
     }
 
     // Initialize App
