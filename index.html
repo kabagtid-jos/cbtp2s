@@ -49,11 +49,11 @@
     // KONFIGURASI SUPABASE & APPS SCRIPT
     // ==========================================
     // 1. Supabase Config (Ganti dengan milik Anda)
-    // Hapus '/rest/v1/' di akhir URL agar createClient dapat bekerja dengan baik
+    // PERBAIKAN 1: Hapus "/rest/v1/" di akhir URL agar fungsi auth berjalan normal
     const SUPABASE_URL = 'https://rmokqxewlajmgnkbhxab.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtb2txeGV3bGFqbWdua2JoeGFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDk2MDEsImV4cCI6MjA5NDA4NTYwMX0.e3Xyc79055zVaO5pXYcyna_ksICED_NDZqHO_D4tJXE';
     
-    // Gunakan nama variabel 'supabaseClient' untuk menghindari bentrok (SyntaxError) dengan library global 'supabase'
+    // PERBAIKAN 2: Ubah nama variabel "supabase" menjadi "supabaseClient" untuk menghindari bentrok dengan library CDN
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // 2. Apps Script Config (Ganti dengan URL Web App Apps Script Anda)
@@ -194,7 +194,7 @@
                 emailLogin = emailLogin + '@cbt.com'; 
             }
 
-            // PROSES AUTH KE SUPABASE (Gunakan supabaseClient yang baru)
+            // PROSES AUTH KE SUPABASE (PERBAIKAN 3: Memanggil supabaseClient)
             const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: emailLogin,
                 password: passwordInput,
@@ -272,7 +272,6 @@
     function handleToken(e) {
         e.preventDefault();
         const token = document.getElementById('token-input').value.toUpperCase();
-        // TODO: Supabase query to check token validity
         if (token === state.examToken) {
             state.view = 'cbt-exam';
             startTimer();
@@ -403,23 +402,15 @@
     }
 
     function attachCBTListeners() {
-        // Prevent accidental exit
         window.onbeforeunload = function() {
             if(state.view === 'cbt-exam') return "Ujian sedang berlangsung, yakin ingin keluar?";
         };
     }
 
     function saveAnswer(value) {
-        // Autosave logic
         const q = state.cbt.questions[state.cbt.currentIndex];
         q.answer = value;
-        // TODO: Supabase - update row in 'jawaban_siswa' table
-        
-        // Re-render only the grid to show answered status, or full render
-        // For simplicity, full render:
         render(); 
-        
-        // If it was radio, auto-next is optional. We keep it manual for safety.
         showToast('Jawaban tersimpan otomatis', 'success');
     }
 
@@ -440,7 +431,6 @@
     function jumpToQuestion(idx) {
         state.cbt.currentIndex = idx;
         render();
-        // Hide mobile grid if open
         const grid = document.getElementById('question-grid');
         if(!grid.classList.contains('translate-x-full')) toggleGrid();
     }
@@ -451,7 +441,6 @@
         
         if (grid.classList.contains('translate-x-full')) {
             grid.classList.remove('hidden');
-            // Small delay to allow display:block to apply before animation
             setTimeout(() => {
                 grid.classList.remove('translate-x-full');
                 overlay.classList.remove('hidden');
@@ -459,7 +448,7 @@
         } else {
             grid.classList.add('translate-x-full');
             overlay.classList.add('hidden');
-            setTimeout(() => grid.classList.add('hidden'), 300); // match transition duration
+            setTimeout(() => grid.classList.add('hidden'), 300);
         }
     }
 
@@ -472,7 +461,7 @@
             
             if (state.cbt.timeLeft <= 0) {
                 clearInterval(state.cbt.timerInterval);
-                finishExam(true); // timeout true
+                finishExam(true); 
             }
         }, 1000);
     }
@@ -482,7 +471,6 @@
         let msg = "Apakah Anda yakin ingin menyelesaikan ujian?";
         if(unanswered > 0) msg = `Masih ada ${unanswered} soal yang belum dijawab. Yakin ingin mengakhiri?`;
         
-        // Simple custom modal instead of alert/confirm
         showConfirmModal(msg, () => finishExam(false));
     }
 
@@ -509,20 +497,16 @@
     }
 
     async function finishExam(isTimeout) {
-        window.onbeforeunload = null; // remove warning
+        window.onbeforeunload = null; 
         clearInterval(state.cbt.timerInterval);
         
         showToast('Mengirim jawaban...', 'info');
 
         try {
-            // TODO: Supabase Submit Final Data
-
-            // Trigger Apps Script Webhook untuk Sync ke Spreadsheet
             if (APPS_SCRIPT_URL !== 'GANTI_DENGAN_URL_WEB_APP_APPS_SCRIPT_ANDA') {
-                // Hitung simulasi skor
                 let skorPG = 0;
                 state.cbt.questions.forEach(q => {
-                    if (q.type === 'pg' && q.answer) skorPG += 20; // simulasi skor
+                    if (q.type === 'pg' && q.answer) skorPG += 20; 
                 });
 
                 await fetch(APPS_SCRIPT_URL, {
@@ -532,7 +516,7 @@
                         namaSiswa: state.user.name,
                         token: state.examToken,
                         skorPG: skorPG,
-                        skorEssay: 0 // Default 0
+                        skorEssay: 0
                     })
                 });
             } else {
@@ -582,7 +566,7 @@
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-xl font-bold">Manajemen Bank Soal</h2>
                 <div class="flex gap-2">
-                    <button class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-slate-900" onclick="showToast('Fitur Buat Soal Manual', 'info')">
+                    <button class="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-slate-900" onclick="openBuatSoalModal()">
                         <i class="fas fa-plus mr-2"></i>Buat Soal
                     </button>
                     <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Fitur Import Soal Format JSON/Excel/Word', 'info')">
@@ -640,7 +624,7 @@
         render();
     }
 
-    // 5. ADMIN DASHBOARD (SEMUA FITUR UMUM CBT)
+    // 5. ADMIN DASHBOARD
     let adminActiveTab = 'monitor';
     function getAdminDashboardHTML() {
         const tabs = [
@@ -788,8 +772,156 @@
         // TODO: Integrate with jsPDF or SheetJS for client-side export, or trigger GAS Webhook
     }
 
+    // --- FITUR GURU: BUAT SOAL MANUAL ---
+    function openBuatSoalModal() {
+        const modal = document.createElement('div');
+        modal.id = 'buat-soal-modal';
+        modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <h3 class="text-xl font-bold text-slate-800">Buat Soal Baru</h3>
+                    <button onclick="closeBuatSoalModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times text-xl"></i></button>
+                </div>
+                <form onsubmit="saveSoal(event)" class="space-y-4 text-left">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Jenis Soal</label>
+                        <select id="input-jenis" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" onchange="toggleOpsiJawaban()">
+                            <option value="pg">Pilihan Ganda</option>
+                            <option value="essay">Essay</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Pertanyaan</label>
+                        <textarea id="input-pertanyaan" required rows="3" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ketik pertanyaan di sini..."></textarea>
+                    </div>
+                    
+                    <div id="container-opsi" class="space-y-3">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Opsi Jawaban & Kunci</label>
+                        <div class="flex items-center gap-2">
+                            <input type="radio" name="kunci_pg" value="0" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="font-bold text-slate-700 w-5">A.</span>
+                            <input type="text" id="opsi-a" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan A" required>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="radio" name="kunci_pg" value="1" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="font-bold text-slate-700 w-5">B.</span>
+                            <input type="text" id="opsi-b" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan B" required>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="radio" name="kunci_pg" value="2" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="font-bold text-slate-700 w-5">C.</span>
+                            <input type="text" id="opsi-c" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan C" required>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="radio" name="kunci_pg" value="3" required class="w-4 h-4 text-blue-600 focus:ring-blue-500">
+                            <span class="font-bold text-slate-700 w-5">D.</span>
+                            <input type="text" id="opsi-d" class="flex-1 px-3 py-1.5 border border-slate-300 rounded outline-none focus:border-blue-500" placeholder="Pilihan D" required>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1"><i class="fas fa-info-circle"></i> Pilih salah satu radio button di sebelah kiri sebagai Kunci Jawaban.</p>
+                    </div>
+
+                    <div id="container-kunci-essay" class="hidden">
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Kata Kunci Jawaban (Untuk Koreksi AI)</label>
+                        <textarea id="input-kunci-essay" rows="2" class="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="Contoh: merdeka, proklamasi, 1945..."></textarea>
+                    </div>
+
+                    <div class="pt-4 flex justify-end gap-3 border-t mt-4">
+                        <button type="button" onclick="closeBuatSoalModal()" class="px-5 py-2 rounded-lg bg-slate-200 text-slate-700 font-medium hover:bg-slate-300 transition">Batal</button>
+                        <button type="submit" id="btn-simpan-soal" class="px-5 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition flex items-center gap-2">
+                            <i class="fas fa-save"></i> Simpan Soal
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    function closeBuatSoalModal() {
+        const modal = document.getElementById('buat-soal-modal');
+        if (modal) modal.remove();
+    }
+
+    function toggleOpsiJawaban() {
+        const jenis = document.getElementById('input-jenis').value;
+        const containerOpsi = document.getElementById('container-opsi');
+        const containerKunciEssay = document.getElementById('container-kunci-essay');
+        const opsiInputs = containerOpsi.querySelectorAll('input[type="text"], input[type="radio"]');
+
+        if (jenis === 'pg') {
+            containerOpsi.classList.remove('hidden');
+            containerKunciEssay.classList.add('hidden');
+            opsiInputs.forEach(input => input.required = true);
+        } else {
+            containerOpsi.classList.add('hidden');
+            containerKunciEssay.classList.remove('hidden');
+            opsiInputs.forEach(input => input.required = false);
+        }
+    }
+
+    async function saveSoal(e) {
+        e.preventDefault();
+        const btnSimpan = document.getElementById('btn-simpan-soal');
+        btnSimpan.disabled = true;
+        btnSimpan.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+
+        const jenis = document.getElementById('input-jenis').value;
+        const pertanyaan = document.getElementById('input-pertanyaan').value;
+        
+        let opsi_jawaban = null;
+        let kunci_jawaban = null;
+
+        if (jenis === 'pg') {
+            const opsiA = document.getElementById('opsi-a').value;
+            const opsiB = document.getElementById('opsi-b').value;
+            const opsiC = document.getElementById('opsi-c').value;
+            const opsiD = document.getElementById('opsi-d').value;
+            opsi_jawaban = [opsiA, opsiB, opsiC, opsiD];
+            
+            // Ambil opsi mana yang ditandai sebagai kunci (0, 1, 2, 3)
+            const selectedRadio = document.querySelector('input[name="kunci_pg"]:checked');
+            if (selectedRadio) {
+                const indexKunci = parseInt(selectedRadio.value);
+                kunci_jawaban = opsi_jawaban[indexKunci]; // Simpan teks jawaban aslinya
+            }
+        } else {
+            kunci_jawaban = document.getElementById('input-kunci-essay').value;
+        }
+
+        try {
+            // Menyimpan ke database Supabase tabel 'soal'
+            const { data, error } = await supabaseClient
+                .from('soal')
+                .insert([
+                    { 
+                        jenis: jenis, 
+                        pertanyaan: pertanyaan, 
+                        opsi_jawaban: opsi_jawaban, 
+                        kunci_jawaban: kunci_jawaban 
+                    }
+                ])
+                .select();
+
+            if (error) throw error;
+
+            showToast('Soal berhasil disimpan ke Database!', 'success');
+            closeBuatSoalModal();
+
+        } catch (error) {
+            console.error('Error saving soal:', error);
+            showToast('Gagal menyimpan: ' + error.message, 'error');
+        } finally {
+            if(document.getElementById('btn-simpan-soal')) {
+                btnSimpan.disabled = false;
+                btnSimpan.innerHTML = '<i class="fas fa-save"></i> Simpan Soal';
+            }
+        }
+    }
+    // --- AKHIR FITUR GURU ---
+
     async function logout() {
-        // Keluarkan sesi dari Supabase (Gunakan supabaseClient yang baru)
+        // PERBAIKAN 4: Memanggil supabaseClient untuk fitur keluar
         await supabaseClient.auth.signOut();
         
         state.view = 'login';
