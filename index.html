@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CBT P2S Abu Zairi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            /* Prevent pull-to-refresh on mobile */
+            overscroll-behavior-y: contain; 
+        }
+        .hide-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scroll {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Toast Animation */
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .toast-enter {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+    </style>
+  <script src="[https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2](https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2)"></script>
+<script>
+  // Ganti URL dan API_KEY di bawah ini dengan milik Anda dari Langkah 1
+  const supabase = supabase.createClient('https://rmokqxewlajmgnkbhxab.supabase.co/rest/v1/', 'sb_publishable_G5lEH2FuhnwmLaetj3otDQ_PoWqsxsX');
+</script>
+</head>
+<body class="text-slate-800 antialiased h-screen flex flex-col overflow-hidden">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+    <!-- Main App Container -->
+    <div id="app" class="w-full h-full flex flex-col overflow-y-auto">
+        <!-- Rendered Content Will Go Here -->
+    </div>
+
+<script>
+    /* ==========================================
+       STATE MANAGEMENT & MOCK DATA
+       ========================================== */
+    // Note: In production, replace mock data with Supabase calls.
+    const state = {
+        view: 'login', // login, token-entry, cbt-exam, cbt-result, guru-dashboard
+        role: null, // 'siswa' or 'guru'
+        user: null,
+        examToken: 'ABUZAIRI2026',
+        cbt: {
+            questions: [
+                { id: 1, type: 'pg', text: 'Siapakah presiden pertama Indonesia?', options: ['Soekarno', 'Suharto', 'Habibie', 'Jokowi'], answer: null },
+                { id: 2, type: 'pg', text: 'Berapakah hasil dari 5 x 5?', options: ['10', '20', '25', '30'], answer: null },
+                { id: 3, type: 'pg', text: 'Ibukota provinsi Jawa Timur adalah...', options: ['Surabaya', 'Malang', 'Semarang', 'Bandung'], answer: null },
+                { id: 4, type: 'essay', text: 'Jelaskan secara singkat makna dari Pancasila sila ke-3!', answer: null }
+            ],
+            currentIndex: 0,
+            timeLeft: 120, // 2 minutes for demo
+            timerInterval: null
+        }
+    };
+
+    /* ==========================================
+       UTILITIES
+       ========================================== */
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        const bgColor = type === 'error' ? 'bg-red-500' : (type === 'success' ? 'bg-green-500' : 'bg-blue-500');
+        
+        toast.className = `${bgColor} text-white px-4 py-3 rounded shadow-lg flex items-center gap-3 toast-enter max-w-sm`;
+        toast.innerHTML = `
+            <i class="fas ${type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+            <span class="text-sm font-medium">${message}</span>
+        `;
+        
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(100%)';
+            toast.style.transition = 'all 0.3s ease';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    function formatTime(seconds) {
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function render() {
+        const app = document.getElementById('app');
+        app.innerHTML = '';
+        
+        switch (state.view) {
+            case 'login': app.innerHTML = getLoginHTML(); break;
+            case 'token-entry': app.innerHTML = getTokenEntryHTML(); break;
+            case 'cbt-exam': app.innerHTML = getCBTExamHTML(); attachCBTListeners(); break;
+            case 'cbt-result': app.innerHTML = getCBTResultHTML(); break;
+            case 'guru-dashboard': app.innerHTML = getGuruDashboardHTML(); break;
+        }
+    }
+
+    /* ==========================================
+       VIEWS / HTML GENERATORS
+       ========================================== */
+
+    // 1. LOGIN VIEW
+    function getLoginHTML() {
+        return `
+            <div class="flex-1 flex items-center justify-center bg-slate-100 p-4">
+                <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+                    <div class="bg-blue-600 p-6 text-center text-white">
+                        <i class="fas fa-graduation-cap text-4xl mb-2"></i>
+                        <h1 class="text-2xl font-bold">CBT P2S Abu Zairi</h1>
+                        <p class="text-blue-100 text-sm mt-1">Sistem Ujian Berbasis Komputer</p>
+                    </div>
+                    <div class="p-6 md:p-8">
+                        <div class="flex gap-2 mb-6 bg-slate-100 p-1 rounded-lg">
+                            <button onclick="switchLoginRole('siswa')" id="btn-role-siswa" class="flex-1 py-2 rounded-md font-medium bg-white shadow text-blue-600 transition">Siswa</button>
+                            <button onclick="switchLoginRole('guru')" id="btn-role-guru" class="flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition">Guru</button>
+                        </div>
+                        <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Username / NIS</label>
+                                <input type="text" id="username" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Masukkan username">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                                <input type="password" id="password" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Masukkan password">
+                            </div>
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition mt-4">
+                                Masuk Aplikasi
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    let currentLoginRole = 'siswa';
+    function switchLoginRole(role) {
+        currentLoginRole = role;
+        document.getElementById('btn-role-siswa').className = role === 'siswa' ? 'flex-1 py-2 rounded-md font-medium bg-white shadow text-blue-600 transition' : 'flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+        document.getElementById('btn-role-guru').className = role === 'guru' ? 'flex-1 py-2 rounded-md font-medium bg-white shadow text-blue-600 transition' : 'flex-1 py-2 rounded-md font-medium text-slate-500 hover:text-slate-800 transition';
+    }
+
+    function handleLogin(e) {
+        e.preventDefault();
+        const user = document.getElementById('username').value;
+        // TODO: SUPABASE AUTH HERE (supabase.auth.signInWithPassword)
+        // Mocking login success
+        state.role = currentLoginRole;
+        state.user = { name: user };
+        
+        if (state.role === 'siswa') {
+            state.view = 'token-entry';
+        } else {
+            state.view = 'guru-dashboard';
+        }
+        render();
+        showToast(`Selamat datang, ${user}!`, 'success');
+    }
+
+    // 2. SISWA TOKEN ENTRY VIEW
+    function getTokenEntryHTML() {
+        return `
+            <div class="flex flex-col h-full bg-slate-50">
+                <header class="bg-white border-b px-4 py-3 flex justify-between items-center shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-graduation-cap text-blue-600 text-xl"></i>
+                        <span class="font-bold text-slate-800">CBT P2S</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-sm font-medium text-slate-600"><i class="fas fa-user-circle mr-1"></i> ${state.user.name}</span>
+                        <button onclick="logout()" class="text-red-500 hover:text-red-700 text-sm"><i class="fas fa-sign-out-alt"></i></button>
+                    </div>
+                </header>
+                <div class="flex-1 flex items-center justify-center p-4">
+                    <div class="bg-white rounded-xl shadow-md p-6 max-w-sm w-full text-center">
+                        <div class="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-2xl mx-auto mb-4">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <h2 class="text-xl font-bold mb-2">Token Ujian</h2>
+                        <p class="text-sm text-slate-500 mb-6">Silakan masukkan token ujian yang diberikan oleh pengawas.</p>
+                        <form onsubmit="handleToken(event)">
+                            <input type="text" id="token-input" required class="w-full text-center tracking-widest uppercase font-bold text-lg px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none mb-4" placeholder="XXXXXX">
+                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition">
+                                Mulai Kerjakan
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function handleToken(e) {
+        e.preventDefault();
+        const token = document.getElementById('token-input').value.toUpperCase();
+        // TODO: Supabase query to check token validity
+        if (token === state.examToken) {
+            state.view = 'cbt-exam';
+            startTimer();
+            render();
+            showToast('Token valid. Ujian dimulai!', 'success');
+        } else {
+            showToast('Token tidak valid! (Hint: ABUZAIRI2026)', 'error');
+        }
+    }
+
+    // 3. CBT EXAM INTERFACE
+    function getCBTExamHTML() {
+        const q = state.cbt.questions[state.cbt.currentIndex];
+        const isLast = state.cbt.currentIndex === state.cbt.questions.length - 1;
+        const isFirst = state.cbt.currentIndex === 0;
+
+        let questionContent = '';
+        if (q.type === 'pg') {
+            questionContent = `
+                <div class="space-y-3 mt-4">
+                    ${q.options.map((opt, idx) => {
+                        const isChecked = q.answer === opt ? 'checked' : '';
+                        const bgClass = q.answer === opt ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-200 hover:bg-slate-50';
+                        return `
+                        <label class="flex items-center p-3 border rounded-lg cursor-pointer transition ${bgClass}">
+                            <input type="radio" name="pg-answer" value="${opt}" class="w-4 h-4 text-blue-600 focus:ring-blue-500" ${isChecked} onchange="saveAnswer('${opt}')">
+                            <span class="ml-3 text-slate-700 font-medium">${String.fromCharCode(65 + idx)}. ${opt}</span>
+                        </label>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        } else if (q.type === 'essay') {
+            questionContent = `
+                <div class="mt-4">
+                    <textarea id="essay-answer" rows="5" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Ketik jawaban Anda di sini..." onblur="saveAnswer(this.value)">${q.answer || ''}</textarea>
+                    <p class="text-xs text-slate-400 mt-2"><i class="fas fa-save"></i> Jawaban tersimpan otomatis saat Anda pindah soal.</p>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="flex flex-col h-full bg-slate-50">
+                <!-- Header -->
+                <header class="bg-white border-b px-4 py-3 flex justify-between items-center shadow-sm sticky top-0 z-20">
+                    <div>
+                        <h1 class="font-bold text-slate-800 text-sm md:text-base truncate max-w-[150px] md:max-w-xs">Matematika & Umum</h1>
+                        <p class="text-xs text-slate-500">${state.user.name}</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="bg-slate-800 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 font-mono text-sm shadow-inner">
+                            <i class="far fa-clock"></i>
+                            <span id="timer-display">${formatTime(state.cbt.timeLeft)}</span>
+                        </div>
+                        <button onclick="toggleGrid()" class="md:hidden bg-slate-200 p-2 rounded-lg text-slate-600">
+                            <i class="fas fa-th"></i>
+                        </button>
+                    </div>
+                </header>
+
+                <div class="flex flex-1 overflow-hidden">
+                    <!-- Main Question Area -->
+                    <main class="flex-1 overflow-y-auto p-4 md:p-6 hide-scroll relative pb-24">
+                        <div class="max-w-3xl mx-auto bg-white p-5 md:p-8 rounded-xl shadow-sm border border-slate-100">
+                            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                                <span class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                                    Soal No. ${state.cbt.currentIndex + 1}
+                                </span>
+                                <span class="text-xs text-slate-400 font-medium">${q.type === 'pg' ? 'Pilihan Ganda' : 'Essay'}</span>
+                            </div>
+                            <div class="text-base md:text-lg text-slate-800 leading-relaxed font-medium">
+                                ${q.text}
+                            </div>
+                            ${questionContent}
+                        </div>
+                    </main>
+
+                    <!-- Sidebar Grid -->
+                    <aside id="question-grid" class="hidden md:block w-64 bg-white border-l shadow-sm overflow-y-auto fixed md:relative right-0 top-0 h-full z-30 transition-transform transform translate-x-full md:translate-x-0">
+                        <div class="p-4 flex flex-col h-full">
+                            <div class="flex justify-between items-center mb-4 md:hidden">
+                                <h3 class="font-bold">Navigasi Soal</h3>
+                                <button onclick="toggleGrid()" class="text-slate-500"><i class="fas fa-times text-xl"></i></button>
+                            </div>
+                            <h3 class="font-bold text-slate-700 hidden md:block mb-3 border-b pb-2">Navigasi Soal</h3>
+                            <div class="grid grid-cols-4 gap-2 mb-6">
+                                ${state.cbt.questions.map((item, idx) => {
+                                    let btnClass = 'bg-white border-slate-300 text-slate-600 hover:bg-slate-100'; // default
+                                    if (item.answer !== null && item.answer !== '') {
+                                        btnClass = 'bg-green-500 border-green-600 text-white shadow-sm'; // answered
+                                    }
+                                    if (idx === state.cbt.currentIndex) {
+                                        btnClass = 'bg-blue-600 border-blue-700 text-white ring-2 ring-blue-300'; // active
+                                    }
+                                    return `<button onclick="jumpToQuestion(${idx})" class="w-full aspect-square flex items-center justify-center rounded border font-medium text-sm transition ${btnClass}">${idx + 1}</button>`;
+                                }).join('')}
+                            </div>
+                            
+                            <div class="mt-auto pt-4 border-t">
+                                <div class="flex items-center gap-2 text-xs mb-1"><span class="w-3 h-3 bg-green-500 rounded-sm"></span> Sudah Dijawab</div>
+                                <div class="flex items-center gap-2 text-xs"><span class="w-3 h-3 border border-slate-300 rounded-sm"></span> Belum Dijawab</div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+
+                <!-- Footer Navigation -->
+                <footer class="bg-white border-t p-3 md:p-4 flex justify-between items-center fixed bottom-0 w-full md:w-[calc(100%-16rem)] z-20">
+                    <button onclick="prevQuestion()" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 font-medium transition flex items-center gap-2 ${isFirst ? 'opacity-50 cursor-not-allowed' : ''}" ${isFirst ? 'disabled' : ''}>
+                        <i class="fas fa-chevron-left"></i> <span class="hidden sm:inline">Sebelumnya</span>
+                    </button>
+                    
+                    ${isLast ? `
+                        <button onclick="confirmSubmit()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow transition flex items-center gap-2">
+                            <i class="fas fa-check-circle"></i> Selesai
+                        </button>
+                    ` : `
+                        <button onclick="nextQuestion()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow transition flex items-center gap-2">
+                            <span class="hidden sm:inline">Selanjutnya</span> <i class="fas fa-chevron-right"></i>
+                        </button>
+                    `}
+                </footer>
+                
+                <!-- Mobile Overlay -->
+                <div id="grid-overlay" class="fixed inset-0 bg-black/50 z-20 hidden md:hidden" onclick="toggleGrid()"></div>
+            </div>
+        `;
+    }
+
+    function attachCBTListeners() {
+        // Prevent accidental exit
+        window.onbeforeunload = function() {
+            if(state.view === 'cbt-exam') return "Ujian sedang berlangsung, yakin ingin keluar?";
+        };
+    }
+
+    function saveAnswer(value) {
+        // Autosave logic
+        const q = state.cbt.questions[state.cbt.currentIndex];
+        q.answer = value;
+        // TODO: Supabase - update row in 'jawaban_siswa' table
+        
+        // Re-render only the grid to show answered status, or full render
+        // For simplicity, full render:
+        render(); 
+        
+        // If it was radio, auto-next is optional. We keep it manual for safety.
+        showToast('Jawaban tersimpan otomatis', 'success');
+    }
+
+    function nextQuestion() {
+        if (state.cbt.currentIndex < state.cbt.questions.length - 1) {
+            state.cbt.currentIndex++;
+            render();
+        }
+    }
+
+    function prevQuestion() {
+        if (state.cbt.currentIndex > 0) {
+            state.cbt.currentIndex--;
+            render();
+        }
+    }
+
+    function jumpToQuestion(idx) {
+        state.cbt.currentIndex = idx;
+        render();
+        // Hide mobile grid if open
+        const grid = document.getElementById('question-grid');
+        if(!grid.classList.contains('translate-x-full')) toggleGrid();
+    }
+
+    function toggleGrid() {
+        const grid = document.getElementById('question-grid');
+        const overlay = document.getElementById('grid-overlay');
+        
+        if (grid.classList.contains('translate-x-full')) {
+            grid.classList.remove('hidden');
+            // Small delay to allow display:block to apply before animation
+            setTimeout(() => {
+                grid.classList.remove('translate-x-full');
+                overlay.classList.remove('hidden');
+            }, 10);
+        } else {
+            grid.classList.add('translate-x-full');
+            overlay.classList.add('hidden');
+            setTimeout(() => grid.classList.add('hidden'), 300); // match transition duration
+        }
+    }
+
+    function startTimer() {
+        clearInterval(state.cbt.timerInterval);
+        state.cbt.timerInterval = setInterval(() => {
+            state.cbt.timeLeft--;
+            const display = document.getElementById('timer-display');
+            if(display) display.innerText = formatTime(state.cbt.timeLeft);
+            
+            if (state.cbt.timeLeft <= 0) {
+                clearInterval(state.cbt.timerInterval);
+                finishExam(true); // timeout true
+            }
+        }, 1000);
+    }
+
+    function confirmSubmit() {
+        const unanswered = state.cbt.questions.filter(q => q.answer === null || q.answer === '').length;
+        let msg = "Apakah Anda yakin ingin menyelesaikan ujian?";
+        if(unanswered > 0) msg = `Masih ada ${unanswered} soal yang belum dijawab. Yakin ingin mengakhiri?`;
+        
+        // Simple custom modal instead of alert/confirm
+        showConfirmModal(msg, () => finishExam(false));
+    }
+
+    function showConfirmModal(msg, onConfirm) {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm';
+        modal.innerHTML = `
+            <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full text-center">
+                <i class="fas fa-question-circle text-4xl text-blue-500 mb-4"></i>
+                <p class="text-slate-800 font-medium mb-6">${msg}</p>
+                <div class="flex gap-3 justify-center">
+                    <button id="btn-cancel" class="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-medium hover:bg-slate-300">Batal</button>
+                    <button id="btn-ok" class="px-4 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700">Yakin Selesai</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        document.getElementById('btn-cancel').onclick = () => modal.remove();
+        document.getElementById('btn-ok').onclick = () => {
+            modal.remove();
+            onConfirm();
+        };
+    }
+
+    function finishExam(isTimeout) {
+        window.onbeforeunload = null; // remove warning
+        clearInterval(state.cbt.timerInterval);
+        
+        fetch('https://script.google.com/macros/s/AKfycbw0PUgwdvYFibsOea94_3w8Jod-XtxWxXsX8LxvK7hMYWtdA5q9npBgY0lOhwfGSn5dcw/exec', { // Ganti dengan URL dari Langkah 2
+    method: 'POST',
+    body: JSON.stringify({
+        nis: "12345",
+        namaSiswa: state.user.name,
+        token: state.examToken,
+        skorPG: 80, // Ini disesuaikan dengan logika perhitungan nilai Anda nanti
+        skorEssay: 15
+    })
+});
+        
+        if (isTimeout) {
+            showToast('Waktu habis! Jawaban otomatis dikirim.', 'info');
+        } else {
+            showToast('Ujian selesai. Jawaban berhasil dikirim.', 'success');
+        }
+        
+        state.view = 'cbt-result';
+        render();
+    }
+
+    function getCBTResultHTML() {
+        return `
+            <div class="flex-1 flex flex-col items-center justify-center bg-slate-50 p-4">
+                <div class="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+                    <div class="w-20 h-20 bg-green-100 text-green-500 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-slate-800 mb-2">Ujian Selesai!</h2>
+                    <p class="text-slate-500 mb-6">Terima kasih, ${state.user.name}. Jawaban Anda telah tersimpan di sistem.</p>
+                    <button onclick="logout()" class="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-medium transition w-full">
+                        Kembali ke Beranda
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // 4. GURU DASHBOARD
+    let guruActiveTab = 'monitor';
+    function getGuruDashboardHTML() {
+        const tabs = [
+            { id: 'monitor', icon: 'fa-desktop', label: 'Monitor' },
+            { id: 'soal', icon: 'fa-file-alt', label: 'Bank Soal' },
+            { id: 'koreksi', icon: 'fa-robot', label: 'Koreksi AI' },
+            { id: 'rekap', icon: 'fa-table', label: 'Rekap Nilai' },
+        ];
+
+        let content = '';
+        if (guruActiveTab === 'monitor') {
+            content = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Monitor Peserta Ujian</h2>
+                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Token Baru: P2S-X9Z', 'info')">
+                        <i class="fas fa-sync-alt mr-2"></i>Generate Token
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-sm">
+                                <th class="p-4 font-medium">Nama Siswa</th>
+                                <th class="p-4 font-medium">Status</th>
+                                <th class="p-4 font-medium">Progress</th>
+                                <th class="p-4 font-medium">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                <td class="p-4 font-medium">Ahmad Budi</td>
+                                <td class="p-4"><span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Mengerjakan</span></td>
+                                <td class="p-4">3/4 Soal</td>
+                                <td class="p-4"><button class="text-red-500 hover:underline" onclick="showToast('Siswa di-reset', 'info')">Reset Login</button></td>
+                            </tr>
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-4 font-medium">Siti Aminah</td>
+                                <td class="p-4"><span class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-xs font-bold">Selesai</span></td>
+                                <td class="p-4">4/4 Soal</td>
+                                <td class="p-4"><button class="text-slate-500 hover:underline">Lihat Hasil</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else if (guruActiveTab === 'soal') {
+            content = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Manajemen Bank Soal</h2>
+                    <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-blue-700" onclick="showToast('Fitur Upload Format JSON/Excel', 'info')">
+                        <i class="fas fa-upload mr-2"></i>Upload Soal
+                    </button>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center text-slate-500">
+                    <i class="fas fa-box-open text-4xl mb-3 text-slate-300"></i>
+                    <p>Integrasi database Supabase akan menampilkan soal di sini.</p>
+                </div>
+            `;
+        } else if (guruActiveTab === 'koreksi') {
+            content = `
+                <h2 class="text-xl font-bold mb-6 flex items-center gap-2">
+                    <i class="fas fa-magic text-purple-500"></i> Koreksi Essay Otomatis (AI)
+                </h2>
+                <div class="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-100 rounded-xl p-6 mb-6">
+                    <p class="text-sm text-slate-600 mb-4">Gunakan AI untuk menganalisa dan memberikan nilai pada jawaban essay siswa berdasarkan kata kunci yang ditetapkan.</p>
+                    <button class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg shadow-md font-medium transition flex items-center gap-2" onclick="showToast('Memulai analisis AI... (Mock)', 'success')">
+                        <i class="fas fa-robot"></i> Jalankan Koreksi AI
+                    </button>
+                </div>
+            `;
+        } else if (guruActiveTab === 'rekap') {
+            content = `
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold">Rekapitulasi Nilai</h2>
+                    <div class="flex gap-2">
+                        <button class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-green-700" onclick="exportData('Excel')">
+                            <i class="fas fa-file-excel mr-2"></i>Export Excel
+                        </button>
+                        <button class="bg-red-500 text-white px-4 py-2 rounded-lg text-sm shadow hover:bg-red-600" onclick="exportData('PDF')">
+                            <i class="fas fa-file-pdf mr-2"></i>Export PDF
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded">
+                    <p class="text-sm text-yellow-700"><i class="fas fa-info-circle mr-1"></i> Data di bawah ini akan otomatis tersinkronisasi ke Google Spreadsheet via Apps Script.</p>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="flex h-full bg-slate-50">
+                <!-- Sidebar -->
+                <aside class="w-64 bg-slate-900 text-white flex flex-col hidden md:flex">
+                    <div class="p-6">
+                        <h1 class="font-bold text-xl flex items-center gap-3">
+                            <i class="fas fa-graduation-cap text-blue-400"></i> Admin CBT
+                        </h1>
+                        <p class="text-slate-400 text-xs mt-1">Panel Guru P2S Abu Zairi</p>
+                    </div>
+                    <nav class="flex-1 px-4 space-y-2 mt-4">
+                        ${tabs.map(tab => `
+                            <button onclick="switchGuruTab('${tab.id}')" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition ${guruActiveTab === tab.id ? 'bg-blue-600 text-white font-medium' : 'text-slate-300 hover:bg-slate-800'}">
+                                <i class="fas ${tab.icon} w-5"></i> ${tab.label}
+                            </button>
+                        `).join('')}
+                    </nav>
+                    <div class="p-4 border-t border-slate-800">
+                        <button onclick="logout()" class="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-red-400 hover:bg-slate-800 transition">
+                            <i class="fas fa-sign-out-alt w-5"></i> Logout
+                        </button>
+                    </div>
+                </aside>
+
+                <!-- Mobile Header & Content -->
+                <div class="flex-1 flex flex-col h-full overflow-hidden">
+                    <header class="md:hidden bg-slate-900 text-white px-4 py-3 flex justify-between items-center">
+                        <div class="font-bold"><i class="fas fa-graduation-cap text-blue-400 mr-2"></i> Panel Guru</div>
+                        <button onclick="logout()" class="text-red-400"><i class="fas fa-sign-out-alt"></i></button>
+                    </header>
+                    
+                    <!-- Mobile Nav -->
+                    <div class="md:hidden flex overflow-x-auto bg-white border-b hide-scroll">
+                        ${tabs.map(tab => `
+                            <button onclick="switchGuruTab('${tab.id}')" class="flex-none px-4 py-3 text-sm font-medium border-b-2 transition ${guruActiveTab === tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}">
+                                <i class="fas ${tab.icon} mr-1"></i> ${tab.label}
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <main class="flex-1 overflow-y-auto p-4 md:p-8">
+                        ${content}
+                    </main>
+                </div>
+            </div>
+        `;
+    }
+
+    function switchGuruTab(tabId) {
+        guruActiveTab = tabId;
+        render();
+    }
+
+    function exportData(type) {
+        showToast(`Memproses export data ke ${type}...`, 'info');
+        // TODO: Integrate with jsPDF or SheetJS for client-side export, or trigger GAS Webhook
+    }
+
+    function logout() {
+        state.view = 'login';
+        state.user = null;
+        state.role = null;
+        clearInterval(state.cbt.timerInterval);
+        render();
+    }
+
+    // Initialize App
+    window.onload = render;
+
+</script>
+</body>
+</html>
