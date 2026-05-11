@@ -49,9 +49,12 @@
     // KONFIGURASI SUPABASE & APPS SCRIPT
     // ==========================================
     // 1. Supabase Config (Ganti dengan milik Anda)
-    const SUPABASE_URL = 'https://rmokqxewlajmgnkbhxab.supabase.co/rest/v1/';
+    // Hapus '/rest/v1/' di akhir URL agar createClient dapat bekerja dengan baik
+    const SUPABASE_URL = 'https://rmokqxewlajmgnkbhxab.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtb2txeGV3bGFqbWdua2JoeGFiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDk2MDEsImV4cCI6MjA5NDA4NTYwMX0.e3Xyc79055zVaO5pXYcyna_ksICED_NDZqHO_D4tJXE';
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    
+    // Gunakan nama variabel 'supabaseClient' untuk menghindari bentrok (SyntaxError) dengan library global 'supabase'
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // 2. Apps Script Config (Ganti dengan URL Web App Apps Script Anda)
     const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw0PUgwdvYFibsOea94_3w8Jod-XtxWxXsX8LxvK7hMYWtdA5q9npBgY0lOhwfGSn5dcw/exec';
@@ -191,8 +194,8 @@
                 emailLogin = emailLogin + '@cbt.com'; 
             }
 
-            // PROSES AUTH KE SUPABASE
-            const { data, error } = await supabase.auth.signInWithPassword({
+            // PROSES AUTH KE SUPABASE (Gunakan supabaseClient yang baru)
+            const { data, error } = await supabaseClient.auth.signInWithPassword({
                 email: emailLogin,
                 password: passwordInput,
             });
@@ -786,8 +789,8 @@
     }
 
     async function logout() {
-        // Keluarkan sesi dari Supabase
-        await supabase.auth.signOut();
+        // Keluarkan sesi dari Supabase (Gunakan supabaseClient yang baru)
+        await supabaseClient.auth.signOut();
         
         state.view = 'login';
         state.user = null;
