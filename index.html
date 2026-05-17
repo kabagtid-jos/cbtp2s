@@ -225,7 +225,7 @@ let ans=null,ragu=false,savedOpts=null;if(pLS){const f=pLS.find(x=>x.id===d.id);
 let opts=savedOpts||[...(d.opsi_jawaban||[])];if(!savedOpts&&cfg.acakJawaban!==false&&opts.length>0){for(let i=opts.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[opts[i],opts[j]]=[opts[j],opts[i]];}}
 return{id:d.id,type:d.jenis,bobot:d.bobot,text:d.pertanyaan,gambar:d.gambar_url,options:opts,kunci_jawaban:d.kunci_jawaban,answer:ans,ragu:ragu||false};
 });
-if(pLS&&pLS.length===qs.length){qs.sort((a,b)=>pLS.findIndex(x=>x.id===a.id)-pLS.findIndex(x=>x.id===b.id));}else{if(cfg.acakSoal!==false){for(let i=qs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[qs[i],qs[j]]=[qs[j],qs[i]];}}localStorage.setItem(`cbt_ans_${state.user.name}_${m}`,JSON.stringify(qs.map(q=>({id:q.id,type:q.type,answer:q.answer,is_correct:q.answer===q.kunci_jawaban,ragu:false,options:q.options}))));}
+if(pLS&&pLS.length===qs.length){qs.sort((a,b)=>pLS.findIndex(x=>x.id===a.id)-pLS.findIndex(x=>x.id===b.id));}else{let qsPG=qs.filter(q=>q.type==='pg'),qsEs=qs.filter(q=>q.type==='essay');if(cfg.acakSoal!==false){for(let i=qsPG.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[qsPG[i],qsPG[j]]=[qsPG[j],qsPG[i]];}for(let i=qsEs.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[qsEs[i],qsEs[j]]=[qsEs[j],qsEs[i]];}}qs=[...qsPG,...qsEs];localStorage.setItem(`cbt_ans_${state.user.name}_${m}`,JSON.stringify(qs.map(q=>({id:q.id,type:q.type,answer:q.answer,is_correct:q.answer===q.kunci_jawaban,ragu:false,options:q.options}))));}
 state.cbt.questions=qs;
 }else showToast('Soal belum ada di database.','info');
 }catch(er){console.error(er);}
