@@ -251,8 +251,81 @@ function updateGuruSetup(k,v){let nR=false;if(['bobotPG','bobotEssay','targetPG'
 async function simpanPengaturanUjian(){const{mapel,kelas,bobotPG,bobotEssay,targetPG,targetEssay,kkm}=state.guruSetup;if(!mapel||!kelas)return showToast('Pilih Mapel dan Kelas terlebih dahulu!','error');const iR=$id('setup-review').checked,aS=$id('setup-acak-soal').checked,aJ=$id('setup-acak-jawaban').checked,tN=$id('setup-tampil-nilai').checked;const b=$id('btn-simpan-pengaturan');if(b){b.disabled=true;b.innerHTML='<i class="fas fa-circle-notch fa-spin mr-2"></i>Menyimpan...';}const idx=state.pengaturanUjian.findIndex(p=>p.mapel===mapel&&p.kelas===kelas);const nd={mapel,kelas,bobotPG,bobotEssay,targetPG,targetEssay,kkm,izinkanReview:iR,acakSoal:aS,acakJawaban:aJ,tampilkanNilai:tN};if(idx>=0)state.pengaturanUjian[idx]=nd;else state.pengaturanUjian.push(nd);try{await saveMasterDataToDB('pengaturan_ujian',state.pengaturanUjian);showToast('Pengaturan dikunci!','success');}catch(e){}finally{if(b){b.disabled=false;b.innerHTML='<i class="fas fa-save mr-2"></i> Simpan Pengaturan';}}}
 
 let guruActiveTab='dashboard';
+function getGuruAccess(){
+const lg=state.adminSetup.dataGuru.find(g=>g.niy===state.user?.name);
+const norm=(v)=>Array.isArray(v)?v.map(x=>String(x).trim()).filter(Boolean):(typeof v==='string'?v.split(',').map(x=>x.trim()).filter(Boolean):[]);
+return{guru:lg,mapel:norm(lg?.mapel),kelas:norm(lg?.kelas)};
+}
+
+async function switchGuruTab(id){
+const validTabs=['dashboard','soal','nilai','analisis'];
+if(!validTabs.includes(id))id='dashboard';
+guruActiveTab=id;
+Object.keys(state.pagination).forEach(k=>{if(k!=='itemsPerPage')state.pagination[k]=1;});
+try{
+state.adminSetup.isLoading=true;
+render();
+if(id==='dashboard'||id==='soal'||id==='analisis')await loadDaftarSoal();
+if(id==='dashboard'||id==='nilai'||id==='analisis')await loadHasilUjianFromDB();
+const akses=getGuruAccess();
+if((id==='nilai'||id==='analisis')){
+if(!state.guruSetup.analisisMapel&&akses.mapel.length>0)state.guruSetup.analisisMapel=akses.mapel[0];
+if(!state.guruSetup.analisisKelas&&akses.kelas.length>0)state.guruSetup.analisisKelas=akses.kelas[0];
+}
+}catch(e){console.error(e);showToast('Gagal membuka menu guru.','error');}
+finally{state.adminSetup.isLoading=false;render();}
+}
+
+function updateAnalisisFilter(k,v){
+if(k==='mapel')state.guruSetup.analisisMapel=v;
+if(k==='kelas')state.guruSetup.analisisKelas=v;
+state.pagination.gNilai=1;
+render();
+}
+
+function updateGuruRekapFilter(k,v){
+if(!state.guruSetup.rekapFilter)state.guruSetup.rekapFilter={search:'',showBelum:false};
+state.guruSetup.rekapFilter[k]=v;
+state.pagination.gNilai=1;
+render();
+}
+
+function printRekapGuru(){
+const el=$id('area-cetak-rekap-guru');
+if(!el)return showToast('Buka menu Hasil Nilai terlebih dahulu.','error');
+const content=el.outerHTML;
+const win=window.open('','','width=900,height=650');
+if(!win)return showToast('Popup cetak diblokir browser.','error');
+const m=state.guruSetup.analisisMapel||'-',k=state.guruSetup.analisisKelas||'-';
+win.document.write(`<html><head><title>Cetak Rekap Guru</title><style>body{font-family:sans-serif;} table{width:100%;border-collapse:collapse;font-size:12px;} th,td{border:1px solid #ddd;padding:8px;text-align:left;} th{background:#f8f9fa;} .text-center{text-align:center;} .hide-on-print{display:none!important;}</style></head><body><h2 style="text-align:center; margin-bottom:5px;">Laporan Hasil Nilai Ujian</h2><p style="text-align:center; margin-top:0; margin-bottom:20px; font-weight:bold; color:#555;">Guru: ${state.user.realName} | Mapel: ${m} | Kelas: ${k}<br>Tahun Ajaran: ${state.pengaturanUmum.tahunAjaran} | Semester: ${state.pengaturanUmum.semester}</p>${content}</body></html>`);
+win.document.close();win.focus();setTimeout(()=>{win.print();win.close();},250);
+}
+
+function exportExcelRekapGuru(){
+const akses=getGuruAccess();
+const aM=state.guruSetup.analisisMapel||(akses.mapel.length>0?akses.mapel[0]:''),aK=state.guruSetup.analisisKelas||(akses.kelas.length>0?akses.kelas[0]:'');
+const rf=state.guruSetup.rekapFilter||{search:'',showBelum:false};
+if(!aM||!aK)return showToast('Pilih Mapel & Kelas dulu','error');
+let data=[];
+if(!rf.showBelum){
+let dH=(state.hasilUjian||[]).filter(h=>h.mapel===aM&&h.kelas===aK&&h.status==='selesai');
+if(rf.search){const src=rf.search.toLowerCase();dH=dH.filter(h=>(h.nama_siswa||'').toLowerCase().includes(src)||(h.nis||'').toLowerCase().includes(src));}
+data=dH.map((h,i)=>{const kkmVal=(state.pengaturanUjian.find(p=>p.mapel===h.mapel&&p.kelas===h.kelas)||{}).kkm||75;return{"No":i+1,"Tahun Ajaran":state.pengaturanUmum.tahunAjaran,"Semester":state.pengaturanUmum.semester,"NIS":h.nis,"Nama Siswa":h.nama_siswa,"Kelas":h.kelas,"Mata Pelajaran":h.mapel,"Skor PG":h.skor_pg||0,"Skor Essay":h.skor_essay||0,"Total Skor":h.total_skor,"KKM":kkmVal,"Keterangan":h.total_skor>=kkmVal?'Tuntas':'Tidak Tuntas',"Waktu Submit":h.waktu_selesai?new Date(h.waktu_selesai).toLocaleString('id-ID'):'-'};});
+}else{
+let siswaKelas=(state.adminSetup.dataSiswa||[]).filter(s=>s.kelas===aK),sId=(state.hasilUjian||[]).filter(h=>h.mapel===aM&&h.kelas===aK).map(h=>h.nis);
+let belum=siswaKelas.filter(s=>!sId.includes(s.nis));
+if(rf.search){const src=rf.search.toLowerCase();belum=belum.filter(s=>(s.nama_lengkap||s.nama||'').toLowerCase().includes(src)||(s.nis||s.nisn||'').toLowerCase().includes(src));}
+data=belum.map((s,i)=>({"No":i+1,"Tahun Ajaran":state.pengaturanUmum.tahunAjaran,"Semester":state.pengaturanUmum.semester,"NIS":s.nis||s.nisn||'-',"Nama Siswa":s.nama_lengkap||s.nama||'-',"Kelas":s.kelas,"Mata Pelajaran":aM,"Status":"Belum Mengerjakan"}));
+}
+if(data.length===0)return showToast('Tidak ada data','error');
+const ws=XLSX.utils.json_to_sheet(data),wb=XLSX.utils.book_new();
+XLSX.utils.book_append_sheet(wb,ws,'Rekap Guru');
+XLSX.writeFile(wb,`Rekap_Guru_${aM||'Mapel'}_${aK||'Kelas'}.xlsx`);
+showToast('Export berhasil!','success');
+}
+
 function getGuruDashboardHTML(){
-const lg=state.adminSetup.dataGuru.find(g=>g.niy===state.user.name);const mM=(lg&&Array.isArray(lg.mapel))?lg.mapel:(typeof lg?.mapel==='string'?lg.mapel.split(','):[]);const mK=(lg&&Array.isArray(lg.kelas))?lg.kelas:(typeof lg?.kelas==='string'?lg.kelas.split(','):[]);
+const akses=getGuruAccess();const lg=akses.guru,mM=akses.mapel,mK=akses.kelas;
 const tabs=[{id:'dashboard',i:'fa-table-cells-large',l:'Dashboard'},{id:'soal',i:'fa-book-open',l:'Bank Soal'},{id:'nilai',i:'fa-clipboard-check',l:'Hasil Nilai'},{id:'analisis',i:'fa-chart-pie',l:'Analisis'}];let c='';
 if(guruActiveTab==='dashboard'){
 const tb=Array.isArray(state.guruSetup.bankSoal)?state.guruSetup.bankSoal.filter(g=>mM.includes(g.mapel)&&mK.includes(g.kelas)).length:0,targetSiswa=Array.isArray(state.adminSetup.dataSiswa)?state.adminSetup.dataSiswa.filter(s=>mK.includes(s.kelas)).length:0,myHasil=(state.hasilUjian||[]).filter(h=>mM.includes(h.mapel)&&mK.includes(h.kelas)),activeExamsCount=new Set(myHasil.map(h=>h.mapel)).size,selesai=myHasil.filter(h=>h.status==='selesai').length,mengerjakan=myHasil.filter(h=>h.status==='mengerjakan').length,belum=Math.max(0,targetSiswa-selesai-mengerjakan),pS=targetSiswa?Math.round((selesai/targetSiswa)*100):0,pM=targetSiswa?Math.round((mengerjakan/targetSiswa)*100):0,pB=targetSiswa?Math.round((belum/targetSiswa)*100):(targetSiswa===0?100:0);
