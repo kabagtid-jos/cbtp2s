@@ -262,36 +262,72 @@ $id('btn-cancel-prompt').onclick=()=>m.remove();$id('btn-ok-prompt').onclick=()=
 
 async function finishExam(isT){
 window.onbeforeunload=null;clearInterval(state.cbt.timerInterval);clearInterval(syncInterval);showToast('Menghitung & Mengirim jawaban...','info');
-try{let skorPG=0,skorEssay=0;const dj=state.cbt.questions.map(q=>{let is_correct=false,ai_score=0;if(q.type==='pg'){is_correct=q.answer===q.kunci_jawaban;if(is_correct){skorPG+=(q.bobot||10);ai_score=q.bobot||10;}}else if(q.type==='essay'){const ans=String(q.answer||'').toLowerCase(),key=String(q.kunci_jawaban||'').toLowerCase(),bobot=q.bobot||20;if(key){const kA=key.split(',').map(x=>x.trim()).filter(x=>x);let mC=0;kA.forEach(x=>{if(ans.includes(x))mC++;});if(mC>0)ai_score=bobot;else if(ans.length>15)ai_score=Math.floor(bobot/2);}else{if(ans.length>20)ai_score=bobot;else if(ans.length>5)ai_score=Math.floor(bobot/2);}skorEssay+=ai_score;}return{id:q.id,type:q.type,answer:q.answer,is_correct,ai_score};});const totalSkor=skorPG+skorEssay;await db.from('hasil_ujian').update({status:'selesai',skor_pg:skorPG,skor_essay:skorEssay,total_skor:totalSkor,waktu_selesai:new Date(),detail_jawaban:dj}).eq('nis',state.user.name).eq('mapel',state.cbt.activeMapel);localStorage.removeItem(`cbt_ans_${state.user.name}_${state.cbt.activeMapel}`);if(APPS_SCRIPT_URL!=='https://script.google.com/macros/s/AKfycbw0PUgwdvYFibsOea94_3w8Jod-XtxWxXsX8LxvK7hMYWtdA5q9npBgY0lOhwfGSn5dcw/exec'){await if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'https://script.google.com/macros/s/AKfycbw0PUgwdvYFibsOea94_3w8Jod-XtxWxXsX8LxvK7hMYWtdA5q9npBgY0lOhwfGSn5dcw/exec') {
-  try {
-    const identitas = getExportIdentity ? getExportIdentity() : {
-      namaLembaga: state.pengaturanUmum.namaLembaga || '',
-      namaUjian: state.pengaturanUmum.namaUjian || '',
-      tahunAjaran: state.pengaturanUmum.tahunAjaran || '',
-      semester: state.pengaturanUmum.semester || ''
-    };
-
-    await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({
-        nis: state.user.name,
-        namaSiswa: state.user.realName || state.user.name,
-        kelas: state.user.kelas || '',
-        mapel: state.cbt.activeMapel,
-        skorPG: skorPG,
-        skorEssay: skorEssay,
-        totalSkor: totalSkor,
-        status: 'selesai',
-        tahunAjaran: identitas.tahunAjaran,
-        semester: identitas.semester,
-        namaLembaga: identitas.namaLembaga,
-        namaUjian: identitas.namaUjian
-      })
+try{
+    let skorPG=0,skorEssay=0;
+    const dj=state.cbt.questions.map(q=>{
+        let is_correct=false,ai_score=0;
+        if(q.type==='pg'){
+            is_correct=q.answer===q.kunci_jawaban;
+            if(is_correct){skorPG+=(q.bobot||10);ai_score=q.bobot||10;}
+        }else if(q.type==='essay'){
+            const ans=String(q.answer||'').toLowerCase(),key=String(q.kunci_jawaban||'').toLowerCase(),bobot=q.bobot||20;
+            if(key){
+                const kA=key.split(',').map(x=>x.trim()).filter(x=>x);let mC=0;
+                kA.forEach(x=>{if(ans.includes(x))mC++;});
+                if(mC>0)ai_score=bobot;else if(ans.length>15)ai_score=Math.floor(bobot/2);
+            }else{
+                if(ans.length>20)ai_score=bobot;else if(ans.length>5)ai_score=Math.floor(bobot/2);
+            }
+            skorEssay+=ai_score;
+        }
+        return{id:q.id,type:q.type,answer:q.answer,is_correct,ai_score,ragu:q.ragu,options:q.options};
     });
-  } catch (err) {
-    console.warn('Gagal mengirim rekap ke Apps Script:', err);
-  }
+    const totalSkor=skorPG+skorEssay;
+    await db.from('hasil_ujian').update({
+        status:'selesai',
+        skor_pg:skorPG,
+        skor_essay:skorEssay,
+        total_skor:totalSkor,
+        waktu_selesai:new Date(),
+        detail_jawaban:dj
+    }).eq('nis',state.user.name).eq('mapel',state.cbt.activeMapel);
+    localStorage.removeItem(`cbt_ans_${state.user.name}_${state.cbt.activeMapel}`);
+
+    if(APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'https://script.google.com/macros/s/AKfycbw0PUgwdvYFibsOea94_3w8Jod-XtxWxXsX8LxvK7hMYWtdA5q9npBgY0lOhwfGSn5dcw/exec'){
+        try{
+            const identitas=typeof getExportIdentity==='function'?getExportIdentity():{
+                namaLembaga:state.pengaturanUmum.namaLembaga||'',
+                namaUjian:state.pengaturanUmum.namaUjian||'',
+                tahunAjaran:state.pengaturanUmum.tahunAjaran||'',
+                semester:state.pengaturanUmum.semester||''
+            };
+            await fetch(APPS_SCRIPT_URL,{
+                method:'POST',
+                mode:'no-cors',
+                body:JSON.stringify({
+                    nis:state.user.name,
+                    namaSiswa:state.user.realName||state.user.name,
+                    kelas:state.user.kelas||'',
+                    mapel:state.cbt.activeMapel,
+                    skorPG,
+                    skorEssay,
+                    totalSkor,
+                    status:'selesai',
+                    tahunAjaran:identitas.tahunAjaran,
+                    semester:identitas.semester,
+                    namaLembaga:identitas.namaLembaga,
+                    namaUjian:identitas.namaUjian
+                })
+            });
+        }catch(err){console.warn('Gagal mengirim rekap ke Apps Script:',err);}
+    }
+    await loadHasilUjianFromDB();
+    state.view='cbt-result';
+    render();
+    showToast(isT?'Waktu habis. Jawaban dikirim.':'Ujian berhasil dikirim.','success');
+}catch(e){
+    console.error(e);
+    showToast('Gagal mengirim jawaban: '+(e.message||'Unknown error'),'error');
 }
 }
 
